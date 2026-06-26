@@ -1,15 +1,54 @@
 import 'package:flutter/material.dart';
 import '../data/contracoes_data.dart';
+import '../models/contracao.dart';
 
-class HistoricoScreen extends StatelessWidget {
+class HistoricoScreen extends StatefulWidget {
   const HistoricoScreen({super.key});
 
-  int get totalHoje => listaContracoes.length;
+  @override
+  State<HistoricoScreen> createState() => _HistoricoScreenState();
+}
+
+class _HistoricoScreenState extends State<HistoricoScreen> {
+  String _filtro = 'Hoje';
+
+  List<Contracao> get contracoesFiltradas {
+    final agora = DateTime.now();
+
+    return listaContracoes.where((c) {
+      final partes = c.inicio.split(':');
+      if (partes.length < 2) return false;
+      final hora = int.tryParse(partes[0]) ?? 0;
+      final minuto = int.tryParse(partes[1]) ?? 0;
+
+      final horarioContracao = DateTime(
+        agora.year,
+        agora.month,
+        agora.day,
+        hora,
+        minuto,
+      );
+
+      if (_filtro == 'Hoje') {
+        return horarioContracao.day == agora.day &&
+            horarioContracao.month == agora.month &&
+            horarioContracao.year == agora.year;
+      } else if (_filtro == 'Semana') {
+        final seteDiasAtras = agora.subtract(const Duration(days: 7));
+        return horarioContracao.isAfter(seteDiasAtras);
+      } else {
+        // Mês
+        return horarioContracao.month == agora.month &&
+            horarioContracao.year == agora.year;
+      }
+    }).toList();
+  }
 
   String get intervaloMedio {
-    if (listaContracoes.length < 2) return '—';
+    final lista = contracoesFiltradas;
+    if (lista.length < 2) return '—';
 
-    final horarios = listaContracoes.map((c) {
+    final horarios = lista.map((c) {
       final partes = c.inicio.split(':');
       if (partes.length != 2) return null;
       final hora = int.tryParse(partes[0]);
@@ -30,12 +69,13 @@ class HistoricoScreen extends StatelessWidget {
   }
 
   String get duracaoMedia {
-    if (listaContracoes.isEmpty) return '—';
+    final lista = contracoesFiltradas;
+    if (lista.isEmpty) return '—';
 
     int somaSegundos = 0;
     int validas = 0;
 
-    for (final c in listaContracoes) {
+    for (final c in lista) {
       final match =
           RegExp(r'Duração:\s*([0-9]{2}):([0-9]{2})').firstMatch(c.observacoes);
       if (match != null) {
@@ -52,9 +92,7 @@ class HistoricoScreen extends StatelessWidget {
     final min = media ~/ 60;
     final seg = media % 60;
 
-    if (min > 0) {
-      return '${min}min';
-    }
+    if (min > 0) return '${min}min';
     return '${seg}s';
   }
 
@@ -136,6 +174,8 @@ class HistoricoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lista = contracoesFiltradas;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0EEFF),
       body: Center(
@@ -154,44 +194,44 @@ class HistoricoScreen extends StatelessWidget {
           child: Column(
             children: [
               Container(
-  width: double.infinity,
-  padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-  decoration: const BoxDecoration(
-    color: Color(0xFFFDF6FF),
-    border: Border(
-      bottom: BorderSide(
-        color: Color.fromRGBO(0, 0, 0, 0.05),
-        width: 0.5,
-      ),
-    ),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      InkWell(
-        onTap: () => Navigator.pop(context),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(
-              Icons.chevron_left_rounded,
-              color: Color(0xFF7F77DD),
-              size: 18,
-            ),
-            SizedBox(width: 4),
-            Text(
-              'Voltar',
-              style: TextStyle(
-                color: Color(0xFF7F77DD),
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 14),
-      const Text(
-        'Histórico',
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFDF6FF),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Color.fromRGBO(0, 0, 0, 0.05),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.chevron_left_rounded,
+                            color: Color(0xFF7F77DD),
+                            size: 18,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Voltar',
+                            style: TextStyle(
+                              color: Color(0xFF7F77DD),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Histórico',
                       style: TextStyle(
                         color: Color(0xFF26215C),
                         fontSize: 20,
@@ -208,13 +248,34 @@ class HistoricoScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Row(
-                      children: [
-                        _chip('Hoje', true),
-                        const SizedBox(width: 8),
-                        _chip('Semana', false),
-                        const SizedBox(width: 8),
-                        _chip('Mês', false),
-                      ],
+                      children: ['Hoje', 'Semana', 'Mês'].map((f) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => setState(() => _filtro = f),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 13, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: _filtro == f
+                                    ? const Color(0xFF534AB7)
+                                    : const Color(0xFFEEEDFE),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                f,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: _filtro == f
+                                      ? Colors.white
+                                      : const Color(0xFF534AB7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
@@ -233,7 +294,7 @@ class HistoricoScreen extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          _summaryItem('$totalHoje', 'Total hoje'),
+                          _summaryItem('${lista.length}', 'Total'),
                           _divider(),
                           _summaryItem(intervaloMedio, 'Intervalo'),
                           _divider(),
@@ -242,9 +303,9 @@ class HistoricoScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    const Text(
-                      'HOJE — REGISTROS',
-                      style: TextStyle(
+                    Text(
+                      '${_filtro.toUpperCase()} — REGISTROS',
+                      style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.8,
@@ -252,7 +313,7 @@ class HistoricoScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (listaContracoes.isEmpty)
+                    if (lista.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -263,16 +324,16 @@ class HistoricoScreen extends StatelessWidget {
                             width: 0.5,
                           ),
                         ),
-                        child: const Text(
-                          'Nenhuma contração registrada ainda.',
-                          style: TextStyle(
+                        child: Text(
+                          'Nenhuma contração registrada $_filtro.',
+                          style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF888780),
                           ),
                         ),
                       )
                     else
-                      ...listaContracoes.reversed.map((c) {
+                      ...lista.reversed.map((c) {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.symmetric(
@@ -349,24 +410,6 @@ class HistoricoScreen extends StatelessWidget {
               navBar(),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(String label, bool ativo) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
-      decoration: BoxDecoration(
-        color: ativo ? const Color(0xFF534AB7) : const Color(0xFFEEEDFE),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: ativo ? Colors.white : const Color(0xFF534AB7),
         ),
       ),
     );
