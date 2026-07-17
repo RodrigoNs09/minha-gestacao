@@ -14,4 +14,9 @@ class GestacaoStorage {
     if (valor == null) return null;
     return DateTime.tryParse(valor);
   }
+
+  static Future<bool> jaConfigurou() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_key);
+  }
 }

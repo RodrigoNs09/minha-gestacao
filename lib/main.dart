@@ -11,10 +11,16 @@ import 'services/contracoes_storage.dart';
 import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/editar_dum_dialog.dart';
+import 'screens/onboarding_screen.dart';
+
+bool _mostrarOnboarding = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   listaContracoes = await ContracoesStorage.carregarContracoes();
+
+  final jaConfigurou = await GestacaoStorage.jaConfigurou();
+  _mostrarOnboarding = !jaConfigurou;
 
   final dumSalva = await GestacaoStorage.carregarDUM();
   if (dumSalva != null) {
@@ -38,7 +44,7 @@ class MinhaGestacaoApp extends StatelessWidget {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
-          home: const HomeScreen(),
+          home: _mostrarOnboarding ? const OnboardingScreen() : const HomeScreen(),
         );
       },
     );
@@ -451,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 4),
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('Seu apoio inteligente para entender contrações',
+                          child: Text('Acompanhando sua gestação, dia a dia',
                               style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
                         ),
                         const SizedBox(height: 20),
