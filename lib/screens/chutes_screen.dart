@@ -37,6 +37,17 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
   Future<void> _carregar() async {
     final dados = await ChutesStorage.carregarSessoes();
     setState(() => listaChutes = dados);
+
+    final progresso = await ChutesStorage.carregarProgressoAtual();
+    if (progresso != null && progresso['data'] == _hoje()) {
+      setState(() {
+        _chutesAtuais = progresso['chutes'];
+        _inicioSessao = DateTime.tryParse(progresso['horaInicio']);
+      });
+    } else if (progresso != null) {
+      // Progresso de outro dia — descarta
+      await ChutesStorage.limparProgressoAtual();
+    }
   }
 
   String _hoje() {
@@ -60,6 +71,13 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
 
     setState(() => _chutesAtuais++);
 
+    // Salva o progresso a cada chute, para não perder se sair da tela
+    await ChutesStorage.salvarProgressoAtual(
+      chutes: _chutesAtuais,
+      data: _hoje(),
+      horaInicio: _inicioSessao!.toIso8601String(),
+    );
+
     if (_chutesAtuais >= _metaChutes) {
       final fim = DateTime.now();
       final novaSessao = ChuteSessao(
@@ -72,6 +90,7 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
 
       listaChutes.add(novaSessao);
       await ChutesStorage.salvarSessoes(listaChutes);
+      await ChutesStorage.limparProgressoAtual();
 
       // Pequeno delay pra usuária ver a meta atingida antes de resetar
       await Future.delayed(const Duration(milliseconds: 1200));

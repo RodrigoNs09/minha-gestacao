@@ -17,9 +17,17 @@ class _SintomasScreenState extends State<SintomasScreen> {
   final TextEditingController _pesoController = TextEditingController();
   bool _pesoSalvo = false;
 
+  final List<String> _emojisHumor = ['😊', '😐', '😔', '😩', '🤢'];
+
   String _hoje() {
     final agora = DateTime.now();
     return '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
+  }
+
+  String _formatarData(String dataIso) {
+    final partes = dataIso.split('-');
+    if (partes.length != 3) return dataIso;
+    return '${partes[2]}/${partes[1]}';
   }
 
   @override
@@ -66,6 +74,7 @@ class _SintomasScreenState extends State<SintomasScreen> {
     ));
 
     await SintomasStorage.salvarRegistros(listaSintomas);
+    setState(() {});
   }
 
   void _selecionarHumor(int index) {
@@ -91,7 +100,17 @@ class _SintomasScreenState extends State<SintomasScreen> {
     if (mounted) setState(() => _pesoSalvo = false);
   }
 
-  final List<String> _emojisHumor = ['😊', '😐', '😔', '😩', '🤢'];
+  List<RegistroSintomas> get _historico {
+    final hoje = _hoje();
+    final lista = listaSintomas.where((r) => r.data != hoje).toList();
+    lista.sort((a, b) => b.data.compareTo(a.data));
+    return lista;
+  }
+
+  String _labelSintoma(String id) {
+    final opcao = opcoesDeSintomas.where((o) => o.id == id).toList();
+    return opcao.isNotEmpty ? opcao.first.label : id;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -301,6 +320,85 @@ class _SintomasScreenState extends State<SintomasScreen> {
                               ),
                             ],
                           ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Card de histórico
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface(context),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.border(context), width: 0.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('HISTÓRICO',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: AppColors.textSecondary(context))),
+                          const SizedBox(height: 4),
+                          if (_historico.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Text(
+                                'Seus registros anteriores vão aparecer aqui.',
+                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary(context)),
+                              ),
+                            )
+                          else
+                            ..._historico.map((r) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  border: Border(bottom: BorderSide(color: AppColors.statPurple(context), width: 0.5)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 36,
+                                      child: Text(_formatarData(r.data),
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary(context))),
+                                    ),
+                                    if (r.humor != null) ...[
+                                      Text(_emojisHumor[r.humor!], style: const TextStyle(fontSize: 16)),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (r.sintomas.isNotEmpty)
+                                            Wrap(
+                                              spacing: 4,
+                                              runSpacing: 4,
+                                              children: r.sintomas.map((id) {
+                                                return Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.statPink(context),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Text(_labelSintoma(id),
+                                                      style: const TextStyle(fontSize: 8, color: Color(0xFF993556))),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          if (r.peso != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 3),
+                                              child: Text('${r.peso} kg',
+                                                  style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
                         ],
                       ),
                     ),
