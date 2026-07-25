@@ -4,19 +4,23 @@ App Flutter completo de acompanhamento de gestação, desenvolvido em parceria c
 
 ## Funcionalidades
 
+### Onboarding
+- **Configuração inicial flexível** — a gestante informa como prefere: quantas semanas está ou a data prevista do parto (DPP), sem precisar saber a data exata da última menstruação
+
 ### Contrações
 - **Registro em tempo real** — timer com início, duração e intensidade
 - **Histórico** — filtros por hoje, semana e mês com estatísticas dinâmicas
 - **Assistente de Dúvidas** — respostas com apoio de IA sobre o trabalho de parto
 
 ### Gestação
-- **Progresso da gestação** — semana atual, trimestre e tamanho do bebê comparado a frutas, calculado automaticamente a partir da data da última menstruação
-- **Contador de Chutes** — monitora os movimentos do bebê com meta de 10 chutes, histórico de sessões
-- **Diário de Sintomas** — humor do dia, checklist de sintomas comuns e registro de peso
+- **Progresso da gestação** — semana atual, trimestre e tamanho do bebê comparado a frutas, calculado automaticamente e editável a qualquer momento
+- **Contador de Chutes** — monitora os movimentos do bebê com meta de 10 chutes; o progresso é salvo a cada clique, então uma sessão iniciada não se perde mesmo saindo da tela
+- **Diário de Sintomas** — humor do dia, checklist de sintomas comuns e registro de peso, com histórico completo dos dias anteriores
 - **Agenda de Consultas** — cadastro de consultas e exames com contagem regressiva, histórico de realizadas
 
 ### Experiência
 - **Modo escuro / claro** — toggle com persistência e paleta adaptada à identidade visual
+- **Navegação enxuta** — barra inferior com acesso direto às funcionalidades principais, sem duplicações
 - **Dados 100% locais** — tudo salvo no dispositivo via SharedPreferences, sem necessidade de internet
 
 ## Tecnologias
@@ -40,8 +44,8 @@ App Flutter completo de acompanhamento de gestação, desenvolvido em parceria c
 
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/RodrigoNs09/sua-contracao-.git
-   cd sua-contracao-
+   git clone https://github.com/RodrigoNs09/minha-gestacao.git
+   cd minha-gestacao
    ```
 
 2. Instale as dependências:
@@ -51,8 +55,8 @@ App Flutter completo de acompanhamento de gestação, desenvolvido em parceria c
 
 3. Rode o projeto:
    ```bash
-   # Web
-   flutter run -d chrome
+   # Web (recomenda-se fixar a porta para persistência entre execuções)
+   flutter run -d chrome --web-port=5050
 
    # Android (com emulador ou dispositivo conectado)
    flutter run -d android
@@ -85,11 +89,12 @@ lib/
 │   ├── sintomas_storage.dart
 │   └── consultas_storage.dart
 ├── screens/
+│   ├── onboarding_screen.dart       # Configuração inicial (semanas ou DPP)
 │   ├── contracao_screen.dart        # Timer e registro de contrações
 │   ├── historico_screen.dart        # Histórico com filtros
 │   ├── assistente_screen.dart       # Chat com IA
 │   ├── chutes_screen.dart           # Contador de chutes
-│   ├── sintomas_screen.dart         # Diário de sintomas
+│   ├── sintomas_screen.dart         # Diário de sintomas + histórico
 │   └── agenda_screen.dart           # Agenda de consultas
 └── main.dart                        # App entry point + HomeScreen
 ```

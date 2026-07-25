@@ -115,7 +115,15 @@ class _HomeScreenState extends State<HomeScreen> {
       soma += (horarios[i] - horarios[i - 1]).abs();
     }
     final media = soma ~/ (horarios.length - 1);
-    return '${media}min';
+    return _formatarMinutos(media);
+  }
+
+  String _formatarMinutos(int totalMinutos) {
+    if (totalMinutos < 60) return '${totalMinutos}min';
+    final horas = totalMinutos ~/ 60;
+    final minutos = totalMinutos % 60;
+    if (minutos == 0) return '${horas}h';
+    return '${horas}h${minutos}min';
   }
 
   // ── Widgets auxiliares ──────────────────────────────────────────────
