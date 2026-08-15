@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/contracao.dart';
 import '../data/contracoes_data.dart';
 import '../services/contracoes_storage.dart';
+import '../theme/app_theme.dart';
 
 class ContracaoScreen extends StatefulWidget {
   const ContracaoScreen({super.key});
@@ -60,7 +61,6 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
     _timer?.cancel();
     final fimDateTime = DateTime.now();
 
-    // Data do registro — mesmo dia do início da contração (correção do bug de histórico)
     final dataRegistro =
         '${_inicioDateTime!.year}-${_inicioDateTime!.month.toString().padLeft(2, '0')}-${_inicioDateTime!.day.toString().padLeft(2, '0')}';
 
@@ -136,36 +136,36 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
     );
   }
 
-  Widget navBar() {
+  Widget navBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.navBar(context),
         border: Border.all(
-          color: const Color.fromRGBO(0, 0, 0, 0.06),
+          color: AppColors.border(context),
           width: 0.5,
         ),
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(36),
         ),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Icon(Icons.home_rounded, color: Color(0xFF888780), size: 20),
+          Icon(Icons.home_rounded, color: AppColors.textSecondary(context), size: 20),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.access_time_rounded, color: Color(0xFF534AB7), size: 20),
-              SizedBox(height: 3),
-              CircleAvatar(
+              Icon(Icons.access_time_rounded, color: AppTheme.primaryPurple, size: 20),
+              const SizedBox(height: 3),
+              const CircleAvatar(
                 radius: 2,
                 backgroundColor: Color(0xFF534AB7),
               ),
             ],
           ),
-          Icon(Icons.auto_graph_rounded, color: Color(0xFF888780), size: 20),
-          Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF888780), size: 20),
+          Icon(Icons.auto_graph_rounded, color: AppColors.textSecondary(context), size: 20),
+          Icon(Icons.chat_bubble_outline_rounded, color: AppColors.textSecondary(context), size: 20),
         ],
       ),
     );
@@ -174,16 +174,16 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EEFF),
+      backgroundColor: AppColors.scaffold(context),
       body: Center(
         child: Container(
           width: 300,
           constraints: const BoxConstraints(minHeight: 620),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(36),
             border: Border.all(
-              color: const Color.fromRGBO(0, 0, 0, 0.08),
+              color: AppColors.borderStrong(context),
               width: 0.5,
             ),
           ),
@@ -248,7 +248,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                 Expanded(
                   child: Container(
                     width: double.infinity,
-                    color: Colors.white,
+                    color: AppColors.surface(context),
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                       children: [
@@ -258,37 +258,37 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                             vertical: 24,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEEEDFE),
+                            color: AppColors.statPurple(context),
                             borderRadius: BorderRadius.circular(22),
                           ),
                           child: Column(
                             children: [
-                              const Text(
+                              Text(
                                 'DURAÇÃO ATUAL',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF7F77DD),
+                                  color: AppColors.purpleLabel(context),
                                   letterSpacing: 0.8,
                                 ),
                               ),
                               const SizedBox(height: 10),
                               Text(
                                 formatarTempo(_segundos),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 48,
                                   fontWeight: FontWeight.w500,
-                                  color: Color(0xFF3C3489),
+                                  color: AppColors.accentText(context),
                                   height: 1,
                                   letterSpacing: -2,
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Text(
+                              Text(
                                 'min : seg',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xFF7F77DD),
+                                  color: AppColors.purpleLabel(context),
                                 ),
                               ),
                             ],
@@ -324,17 +324,17 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.surface(context),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: const Color.fromRGBO(83, 74, 183, 0.25),
+                                color: AppTheme.primaryPurple.withOpacity(0.25),
                               ),
                             ),
-                            child: const Text(
+                            child: Text(
                               '■ Parar e Salvar',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Color(0xFF534AB7),
+                                color: AppTheme.primaryPurple,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -342,13 +342,13 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           'INTENSIDADE',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.8,
-                            color: Color(0xFFB4B2A9),
+                            color: AppColors.textMuted(context),
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -357,7 +357,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                             intensidadeButton(
                               label: 'Leve',
                               emoji: '😌',
-                              bgColor: const Color(0xFFE1F5EE),
+                              bgColor: AppColors.statGreen(context),
                               textColor: const Color(0xFF085041),
                               selected: intensidade == 'Leve',
                             ),
@@ -365,7 +365,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                             intensidadeButton(
                               label: 'Moderada',
                               emoji: '😬',
-                              bgColor: const Color(0xFFFAEEDA),
+                              bgColor: AppColors.statOrange(context),
                               textColor: const Color(0xFF633806),
                               selected: intensidade == 'Moderada',
                             ),
@@ -373,45 +373,46 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                             intensidadeButton(
                               label: 'Forte',
                               emoji: '😣',
-                              bgColor: const Color(0xFFFBEAF0),
+                              bgColor: AppColors.statPink(context),
                               textColor: const Color(0xFF72243E),
                               selected: intensidade == 'Forte',
                             ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           'OBSERVAÇÃO',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.8,
-                            color: Color(0xFFB4B2A9),
+                            color: AppColors.textMuted(context),
                           ),
                         ),
                         const SizedBox(height: 10),
                         TextField(
                           controller: observacoesController,
                           maxLines: 4,
+                          style: TextStyle(color: AppColors.textPrimary(context)),
                           decoration: InputDecoration(
                             hintText: 'Adicione uma anotação...',
-                            hintStyle: const TextStyle(
+                            hintStyle: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF888780),
+                              color: AppColors.textSecondary(context),
                             ),
                             filled: true,
-                            fillColor: const Color(0xFFF7F5FF),
+                            fillColor: AppColors.statPurple(context),
                             contentPadding: const EdgeInsets.all(12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(13),
-                              borderSide: const BorderSide(
-                                color: Color.fromRGBO(83, 74, 183, 0.12),
+                              borderSide: BorderSide(
+                                color: AppTheme.primaryPurple.withOpacity(0.12),
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(13),
-                              borderSide: const BorderSide(
-                                color: Color.fromRGBO(83, 74, 183, 0.12),
+                              borderSide: BorderSide(
+                                color: AppTheme.primaryPurple.withOpacity(0.12),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
@@ -426,7 +427,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                     ),
                   ),
                 ),
-                navBar(),
+                navBar(context),
               ],
             ),
           ),
