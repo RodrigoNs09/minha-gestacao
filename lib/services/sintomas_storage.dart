@@ -1,19 +1,44 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/registro_sintomas.dart';
 
 class SintomasStorage {
-  static const String _key = 'registros_sintomas';
+  static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  static CollectionReference<Map<String, dynamic>>? get _colecao {
+    final uid = _uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(uid)
+        .collection('sintomas');
+  }
 
   static Future<void> salvarRegistros(List<RegistroSintomas> registros) async {
-    final prefs = await SharedPreferences.getInstance();
-    final listaJson = registros.map((r) => jsonEncode(r.toMap())).toList();
-    await prefs.setStringList(_key, listaJson);
+    final colecao = _colecao;
+    if (colecao == null) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    final existentes = await colecao.get();
+    for (final doc in existentes.docs) {
+      batch.delete(doc.reference);
+    }
+
+    for (final r in registros) {
+      // Usa a data como ID do documento — evita duplicar o mesmo dia
+      final novoDoc = colecao.doc(r.data);
+      batch.set(novoDoc, r.toMap());
+    }
+
+    await batch.commit();
   }
 
   static Future<List<RegistroSintomas>> carregarRegistros() async {
-    final prefs = await SharedPreferences.getInstance();
-    final listaJson = prefs.getStringList(_key) ?? [];
-    return listaJson.map((item) => RegistroSintomas.fromMap(jsonDecode(item))).toList();
+    final colecao = _colecao;
+    if (colecao == null) return [];
+
+    final snapshot = await colecao.get();
+    return snapshot.docs.map((doc) => RegistroSintomas.fromMap(doc.data())).toList();
   }
 }

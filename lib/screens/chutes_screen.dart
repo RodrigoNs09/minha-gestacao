@@ -89,7 +89,7 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
       );
 
       listaChutes.add(novaSessao);
-      await ChutesStorage.salvarSessoes(listaChutes);
+      await ChutesStorage.adicionarSessao(novaSessao);
       await ChutesStorage.limparProgressoAtual();
 
       // Pequeno delay pra usuária ver a meta atingida antes de resetar

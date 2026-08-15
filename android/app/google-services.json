@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "535945239801",
+    "project_id": "minha-gestacao-4af55",
+    "storage_bucket": "minha-gestacao-4af55.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:535945239801:android:f9512c8918af63e3909628",
+        "android_client_info": {
+          "package_name": "com.example.suacontracao_ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPiXSxtE82741Jhu4kI4HNbweCJLp6I_c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

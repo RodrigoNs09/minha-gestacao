@@ -12,34 +12,37 @@ class HistoricoScreen extends StatefulWidget {
 class _HistoricoScreenState extends State<HistoricoScreen> {
   String _filtro = 'Hoje';
 
+  String _hoje() {
+    final agora = DateTime.now();
+    return '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime? _parseData(String data) {
+    final partes = data.split('-');
+    if (partes.length != 3) return null;
+    final ano = int.tryParse(partes[0]);
+    final mes = int.tryParse(partes[1]);
+    final dia = int.tryParse(partes[2]);
+    if (ano == null || mes == null || dia == null) return null;
+    return DateTime(ano, mes, dia);
+  }
+
   List<Contracao> get contracoesFiltradas {
     final agora = DateTime.now();
+    final hojeData = DateTime(agora.year, agora.month, agora.day);
 
     return listaContracoes.where((c) {
-      final partes = c.inicio.split(':');
-      if (partes.length < 2) return false;
-      final hora = int.tryParse(partes[0]) ?? 0;
-      final minuto = int.tryParse(partes[1]) ?? 0;
-
-      final horarioContracao = DateTime(
-        agora.year,
-        agora.month,
-        agora.day,
-        hora,
-        minuto,
-      );
+      final dataContracao = _parseData(c.data);
+      if (dataContracao == null) return false;
 
       if (_filtro == 'Hoje') {
-        return horarioContracao.day == agora.day &&
-            horarioContracao.month == agora.month &&
-            horarioContracao.year == agora.year;
+        return dataContracao == hojeData;
       } else if (_filtro == 'Semana') {
-        final seteDiasAtras = agora.subtract(const Duration(days: 7));
-        return horarioContracao.isAfter(seteDiasAtras);
+        final seteDiasAtras = hojeData.subtract(const Duration(days: 7));
+        return !dataContracao.isBefore(seteDiasAtras) && !dataContracao.isAfter(hojeData);
       } else {
         // Mês
-        return horarioContracao.month == agora.month &&
-            horarioContracao.year == agora.year;
+        return dataContracao.month == hojeData.month && dataContracao.year == hojeData.year;
       }
     }).toList();
   }
@@ -65,7 +68,15 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }
 
     final media = soma ~/ (horarios.length - 1);
-    return '${media}min';
+    return _formatarMinutos(media);
+  }
+
+  String _formatarMinutos(int totalMinutos) {
+    if (totalMinutos < 60) return '${totalMinutos}min';
+    final horas = totalMinutos ~/ 60;
+    final minutos = totalMinutos % 60;
+    if (minutos == 0) return '${horas}h';
+    return '${horas}h${minutos}min';
   }
 
   String get duracaoMedia {
@@ -136,6 +147,18 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return '--:--';
   }
 
+  String formatarDataExibicao(String data) {
+    final d = _parseData(data);
+    if (d == null) return '';
+    final hoje = DateTime.now();
+    final hojeData = DateTime(hoje.year, hoje.month, hoje.day);
+
+    if (d == hojeData) return 'Hoje';
+    if (d == hojeData.subtract(const Duration(days: 1))) return 'Ontem';
+
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+  }
+
   Widget navBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -175,6 +198,13 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
   @override
   Widget build(BuildContext context) {
     final lista = contracoesFiltradas;
+    // Ordena mais recente primeiro (por data, depois por horário)
+    final listaOrdenada = [...lista]
+      ..sort((a, b) {
+        final compData = b.data.compareTo(a.data);
+        if (compData != 0) return compData;
+        return b.inicio.compareTo(a.inicio);
+      });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0EEFF),
@@ -313,7 +343,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (lista.isEmpty)
+                    if (listaOrdenada.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -333,7 +363,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                         ),
                       )
                     else
-                      ...lista.reversed.map((c) {
+                      ...listaOrdenada.map((c) {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.symmetric(
@@ -363,13 +393,29 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      c.inicio,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF26215C),
-                                      ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          c.inicio,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFF26215C),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEEEDFE),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            formatarDataExibicao(c.data),
+                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF534AB7)),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
@@ -448,3 +494,4 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     );
   }
 }
+

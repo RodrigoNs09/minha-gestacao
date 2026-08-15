@@ -60,7 +60,12 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
     _timer?.cancel();
     final fimDateTime = DateTime.now();
 
+    // Data do registro — mesmo dia do início da contração (correção do bug de histórico)
+    final dataRegistro =
+        '${_inicioDateTime!.year}-${_inicioDateTime!.month.toString().padLeft(2, '0')}-${_inicioDateTime!.day.toString().padLeft(2, '0')}';
+
     final novaContracao = Contracao(
+      data: dataRegistro,
       inicio:
           '${_inicioDateTime!.hour.toString().padLeft(2, '0')}:${_inicioDateTime!.minute.toString().padLeft(2, '0')}',
       fim:

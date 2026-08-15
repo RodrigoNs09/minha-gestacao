@@ -1,27 +1,45 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/contracao.dart';
 
 class ContracoesStorage {
-  static const String _key = 'contracoes_salvas';
+  static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  static CollectionReference<Map<String, dynamic>>? get _colecao {
+    final uid = _uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(uid)
+        .collection('contracoes');
+  }
 
   static Future<void> salvarContracoes(List<Contracao> contracoes) async {
-    final prefs = await SharedPreferences.getInstance();
+    final colecao = _colecao;
+    if (colecao == null) return; // usuário não logado
 
-    final listaJson = contracoes
-        .map((c) => jsonEncode(c.toMap()))
-        .toList();
+    // Apaga tudo que existe e reescreve a lista inteira
+    // (simples e suficiente para o volume de dados desse app)
+    final batch = FirebaseFirestore.instance.batch();
 
-    await prefs.setStringList(_key, listaJson);
+    final existentes = await colecao.get();
+    for (final doc in existentes.docs) {
+      batch.delete(doc.reference);
+    }
+
+    for (final c in contracoes) {
+      final novoDoc = colecao.doc();
+      batch.set(novoDoc, c.toMap());
+    }
+
+    await batch.commit();
   }
 
   static Future<List<Contracao>> carregarContracoes() async {
-    final prefs = await SharedPreferences.getInstance();
+    final colecao = _colecao;
+    if (colecao == null) return [];
 
-    final listaJson = prefs.getStringList(_key) ?? [];
-
-    return listaJson
-        .map((item) => Contracao.fromMap(jsonDecode(item)))
-        .toList();
+    final snapshot = await colecao.get();
+    return snapshot.docs.map((doc) => Contracao.fromMap(doc.data())).toList();
   }
 }
