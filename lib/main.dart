@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
+import 'models/contracao.dart';
 import 'screens/contracao_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/historico_screen.dart';
 import 'screens/assistente_screen.dart';
 import 'screens/chutes_screen.dart';
@@ -12,28 +17,15 @@ import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/editar_dum_dialog.dart';
 import 'screens/onboarding_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'screens/login_screen.dart'; //flutter run -d chrome --web-port=5050
-
-bool _mostrarOnboarding = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-);
-  listaContracoes = await ContracoesStorage.carregarContracoes();
-
-  final jaConfigurou = await GestacaoStorage.jaConfigurou();
-  _mostrarOnboarding = !jaConfigurou;
-
-  final dumSalva = await GestacaoStorage.carregarDUM();
-  if (dumSalva != null) {
-    atualizarDUM(dumSalva);
-  }
-
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  // Nenhuma chamada ao Firestore/Auth aqui — isso quebra no Flutter Web
+  // se feito antes do runApp. A checagem de onboarding e os dados
+  // são carregados dentro das telas, depois que o app já está rodando.
   runApp(const MinhaGestacaoApp());
 }
 
@@ -44,7 +36,7 @@ class MinhaGestacaoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, mode, __) {
+      builder: (_, mode, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Minha Gestação',
@@ -52,19 +44,34 @@ class MinhaGestacaoApp extends StatelessWidget {
           darkTheme: AppTheme.dark,
           themeMode: mode,
           home: StreamBuilder<User?>(
-  stream: FirebaseAuth.instance.authStateChanges(),
-  builder: (context, snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (!snapshot.hasData) {
-      return const LoginScreen();
-    }
-    return _mostrarOnboarding ? const OnboardingScreen() : const HomeScreen();
-  },
-),
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const LoginScreen();
+              }
+              // Usuário logado — só agora é seguro checar o onboarding
+              return FutureBuilder<bool>(
+                future: GestacaoStorage.jaConfigurou(),
+                builder: (context, snapConfig) {
+                  if (snapConfig.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final jaConfigurou = snapConfig.data ?? false;
+                  if (jaConfigurou) {
+                    return const HomeScreen();
+                  }
+                  return const OnboardingScreen();
+                },
+              );
+            },
+          ),
         );
       },
     );
@@ -109,50 +116,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _isDark => themeNotifier.value == ThemeMode.dark;
 
-  int get totalHoje {
+  // Contrações de hoje, ordenadas cronologicamente (mais antiga → mais recente)
+  List<Contracao> get _contracoesDeHoje {
     final agora = DateTime.now();
     final hoje = '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
-    return listaContracoes.where((c) => c.data == hoje).length;
+    final lista = listaContracoes.where((c) => c.data == hoje).toList();
+    lista.sort((a, b) => a.inicio.compareTo(b.inicio));
+    return lista;
   }
 
+  int get totalHoje => _contracoesDeHoje.length;
+
   String get ultimaDuracao {
-    if (listaContracoes.isEmpty) return '—';
-    final obs = listaContracoes.last.observacoes;
-    final match = RegExp(r'Duração:\s*([0-9]{2}:[0-9]{2})').firstMatch(obs);
+    final hoje = _contracoesDeHoje;
+    if (hoje.isEmpty) return '—';
+    final ultima = hoje.last; // já ordenado, a última é a mais recente de hoje
+    final match = RegExp(r'Duração:\s*([0-9]{2}:[0-9]{2})').firstMatch(ultima.observacoes);
     return match?.group(1) ?? '—';
   }
 
   String get intervaloMedio {
-    if (listaContracoes.length < 2) return '—';
+    final hoje = _contracoesDeHoje;
+    if (hoje.length < 2) return '—';
 
-    // Monta a data+hora completa de cada contração (não só o horário)
-    final momentos = listaContracoes.map((c) {
-      final partesData = c.data.split('-');
-      final partesHora = c.inicio.split(':');
-      if (partesData.length != 3 || partesHora.length != 2) return null;
+    final horarios = hoje.map((c) {
+      final partes = c.inicio.split(':');
+      if (partes.length != 2) return null;
+      final h = int.tryParse(partes[0]);
+      final m = int.tryParse(partes[1]);
+      if (h == null || m == null) return null;
+      return h * 60 + m;
+    }).whereType<int>().toList();
 
-      final ano = int.tryParse(partesData[0]);
-      final mes = int.tryParse(partesData[1]);
-      final dia = int.tryParse(partesData[2]);
-      final hora = int.tryParse(partesHora[0]);
-      final minuto = int.tryParse(partesHora[1]);
+    if (horarios.length < 2) return '—';
 
-      if (ano == null || mes == null || dia == null || hora == null || minuto == null) {
-        return null;
-      }
-      return DateTime(ano, mes, dia, hora, minuto);
-    }).whereType<DateTime>().toList();
-
-    if (momentos.length < 2) return '—';
-
-    momentos.sort(); // ordena cronologicamente, independente de quando foram digitadas
-
-    int somaMinutos = 0;
-    for (int i = 1; i < momentos.length; i++) {
-      somaMinutos += momentos[i].difference(momentos[i - 1]).inMinutes.abs();
+    int soma = 0;
+    for (int i = 1; i < horarios.length; i++) {
+      soma += (horarios[i] - horarios[i - 1]).abs();
     }
-
-    final media = somaMinutos ~/ (momentos.length - 1);
+    final media = soma ~/ (horarios.length - 1);
     return _formatarMinutos(media);
   }
 
@@ -440,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (context, _, __) {
+      builder: (context, _, _) {
         return Scaffold(
           backgroundColor: AppColors.scaffold(context),
           body: Center(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/contracoes_data.dart';
 import '../models/contracao.dart';
+import '../theme/app_theme.dart';
 
 class HistoricoScreen extends StatefulWidget {
   const HistoricoScreen({super.key});
@@ -12,10 +13,10 @@ class HistoricoScreen extends StatefulWidget {
 class _HistoricoScreenState extends State<HistoricoScreen> {
   String _filtro = 'Hoje';
 
-  String _hoje() {
-    final agora = DateTime.now();
-    return '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
-  }
+  static const _meses = [
+    'JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
+    'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'
+  ];
 
   DateTime? _parseData(String data) {
     final partes = data.split('-');
@@ -41,13 +42,49 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
         final seteDiasAtras = hojeData.subtract(const Duration(days: 7));
         return !dataContracao.isBefore(seteDiasAtras) && !dataContracao.isAfter(hojeData);
       } else {
-        // Mês
         return dataContracao.month == hojeData.month && dataContracao.year == hojeData.year;
       }
     }).toList();
   }
 
+  /// Agrupa as contrações filtradas por dia (data yyyy-MM-dd),
+  /// já ordenadas: dias mais recentes primeiro, e dentro de cada
+  /// dia, horários mais recentes primeiro.
+  List<MapEntry<String, List<Contracao>>> get gruposPorDia {
+    final Map<String, List<Contracao>> grupos = {};
+    for (final c in contracoesFiltradas) {
+      grupos.putIfAbsent(c.data, () => []).add(c);
+    }
+
+    for (final lista in grupos.values) {
+      lista.sort((a, b) => b.inicio.compareTo(a.inicio));
+    }
+
+    final entradas = grupos.entries.toList()
+      ..sort((a, b) => b.key.compareTo(a.key)); // datas mais recentes primeiro
+
+    return entradas;
+  }
+
+  String rotuloDia(String data) {
+    final d = _parseData(data);
+    if (d == null) return data;
+    final hoje = DateTime.now();
+    final hojeData = DateTime(hoje.year, hoje.month, hoje.day);
+
+    if (d == hojeData) return 'HOJE — ${d.day} ${_meses[d.month - 1]}';
+    if (d == hojeData.subtract(const Duration(days: 1))) {
+      return 'ONTEM — ${d.day} ${_meses[d.month - 1]}';
+    }
+    return '${d.day} ${_meses[d.month - 1]}';
+  }
+
+  /// Intervalo médio só faz sentido dentro de UM dia. Para Semana/Mês,
+  /// misturar dias diferentes geraria números sem significado real,
+  /// então mostramos "—" nesses casos.
   String get intervaloMedio {
+    if (_filtro != 'Hoje') return '—';
+
     final lista = contracoesFiltradas;
     if (lista.length < 2) return '—';
 
@@ -58,7 +95,8 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       final minuto = int.tryParse(partes[1]);
       if (hora == null || minuto == null) return null;
       return hora * 60 + minuto;
-    }).whereType<int>().toList();
+    }).whereType<int>().toList()
+      ..sort();
 
     if (horarios.length < 2) return '—';
 
@@ -107,14 +145,14 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return '${seg}s';
   }
 
-  Color badgeBg(String intensidade) {
+  Color badgeBg(BuildContext context, String intensidade) {
     switch (intensidade) {
       case 'Forte':
-        return const Color(0xFFFBEAF0);
+        return AppColors.statPink(context);
       case 'Moderada':
-        return const Color(0xFFFAEEDA);
+        return AppColors.statOrange(context);
       default:
-        return const Color(0xFFE1F5EE);
+        return AppColors.statGreen(context);
     }
   }
 
@@ -147,49 +185,68 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return '--:--';
   }
 
-  String formatarDataExibicao(String data) {
-    final d = _parseData(data);
-    if (d == null) return '';
-    final hoje = DateTime.now();
-    final hojeData = DateTime(hoje.year, hoje.month, hoje.day);
-
-    if (d == hojeData) return 'Hoje';
-    if (d == hojeData.subtract(const Duration(days: 1))) return 'Ontem';
-
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
-  }
-
-  Widget navBar() {
+  Widget navBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(
-          color: const Color.fromRGBO(0, 0, 0, 0.06),
-          width: 0.5,
-        ),
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(36),
-        ),
+        color: AppColors.navBar(context),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Icon(Icons.home_rounded, color: Color(0xFF888780), size: 20),
-          Icon(Icons.access_time_rounded, color: Color(0xFF888780), size: 20),
+          Icon(Icons.home_rounded, color: AppColors.textSecondary(context), size: 20),
+          Icon(Icons.access_time_rounded, color: AppColors.textSecondary(context), size: 20),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.auto_graph_rounded, color: Color(0xFF534AB7), size: 20),
-              SizedBox(height: 3),
-              CircleAvatar(
-                radius: 2,
-                backgroundColor: Color(0xFF534AB7),
-              ),
+              Icon(Icons.auto_graph_rounded, color: AppTheme.primaryPurple, size: 20),
+              const SizedBox(height: 3),
+              const CircleAvatar(radius: 2, backgroundColor: Color(0xFF534AB7)),
             ],
           ),
-          Icon(Icons.chat_bubble_outline_rounded,
-              color: Color(0xFF888780), size: 20),
+          Icon(Icons.chat_bubble_outline_rounded, color: AppColors.textSecondary(context), size: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _linhaContracao(BuildContext context, Contracao c) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: dotColor(c.intensidade), shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.inicio,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
+                const SizedBox(height: 1),
+                Text('Duração: ${extrairDuracao(c.observacoes)}',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context))),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: badgeBg(context, c.intensidade), borderRadius: BorderRadius.circular(20)),
+            child: Text(c.intensidade,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: badgeText(c.intensidade))),
+          ),
         ],
       ),
     );
@@ -197,28 +254,19 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lista = contracoesFiltradas;
-    // Ordena mais recente primeiro (por data, depois por horário)
-    final listaOrdenada = [...lista]
-      ..sort((a, b) {
-        final compData = b.data.compareTo(a.data);
-        if (compData != 0) return compData;
-        return b.inicio.compareTo(a.inicio);
-      });
+    final grupos = gruposPorDia;
+    final totalFiltrado = contracoesFiltradas.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EEFF),
+      backgroundColor: AppColors.scaffold(context),
       body: Center(
         child: Container(
           width: 300,
           constraints: const BoxConstraints(minHeight: 620),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: const Color.fromRGBO(0, 0, 0, 0.08),
-              width: 0.5,
-            ),
+            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -226,14 +274,9 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFDF6FF),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Color.fromRGBO(0, 0, 0, 0.05),
-                      width: 0.5,
-                    ),
-                  ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant(context),
+                  border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,40 +285,19 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       onTap: () => Navigator.pop(context),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(
-                            Icons.chevron_left_rounded,
-                            color: Color(0xFF7F77DD),
-                            size: 18,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Voltar',
-                            style: TextStyle(
-                              color: Color(0xFF7F77DD),
-                              fontSize: 12,
-                            ),
-                          ),
+                        children: [
+                          Icon(Icons.chevron_left_rounded, color: AppColors.purpleLabel(context), size: 18),
+                          const SizedBox(width: 4),
+                          Text('Voltar', style: TextStyle(color: AppColors.purpleLabel(context), fontSize: 12)),
                         ],
                       ),
                     ),
                     const SizedBox(height: 14),
-                    const Text(
-                      'Histórico',
-                      style: TextStyle(
-                        color: Color(0xFF26215C),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text('Histórico',
+                        style: TextStyle(color: AppColors.textPrimary(context), fontSize: 20, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 3),
-                    const Text(
-                      'Acompanhe todos os registros',
-                      style: TextStyle(
-                        color: Color(0xFF888780),
-                        fontSize: 12,
-                      ),
-                    ),
+                    Text('Acompanhe todos os registros',
+                        style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                     const SizedBox(height: 14),
                     Row(
                       children: ['Hoje', 'Semana', 'Mês'].map((f) {
@@ -284,24 +306,16 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                           child: GestureDetector(
                             onTap: () => setState(() => _filtro = f),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 13, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
                               decoration: BoxDecoration(
-                                color: _filtro == f
-                                    ? const Color(0xFF534AB7)
-                                    : const Color(0xFFEEEDFE),
+                                color: _filtro == f ? AppTheme.primaryPurple : AppColors.statPurple(context),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Text(
-                                f,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: _filtro == f
-                                      ? Colors.white
-                                      : const Color(0xFF534AB7),
-                                ),
-                              ),
+                              child: Text(f,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: _filtro == f ? Colors.white : AppTheme.primaryPurple)),
                             ),
                           ),
                         );
@@ -317,14 +331,12 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF534AB7), Color(0xFF7F77DD)],
-                        ),
+                        gradient: const LinearGradient(colors: [Color(0xFF534AB7), Color(0xFF7F77DD)]),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Row(
                         children: [
-                          _summaryItem('${lista.length}', 'Total'),
+                          _summaryItem('$totalFiltrado', 'Total'),
                           _divider(),
                           _summaryItem(intervaloMedio, 'Intervalo'),
                           _divider(),
@@ -333,127 +345,36 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Text(
-                      '${_filtro.toUpperCase()} — REGISTROS',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.8,
-                        color: Color(0xFFB4B2A9),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (listaOrdenada.isEmpty)
+                    if (grupos.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.surface(context),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color.fromRGBO(0, 0, 0, 0.07),
-                            width: 0.5,
-                          ),
+                          border: Border.all(color: AppColors.border(context), width: 0.5),
                         ),
-                        child: Text(
-                          'Nenhuma contração registrada $_filtro.',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF888780),
-                          ),
-                        ),
+                        child: Text('Nenhuma contração registrada.',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary(context))),
                       )
                     else
-                      ...listaOrdenada.map((c) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color.fromRGBO(0, 0, 0, 0.07),
-                              width: 0.5,
+                      ...grupos.expand((grupo) {
+                        return [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8, top: 4),
+                            child: Text(
+                              rotuloDia(grupo.key),
+                              style: TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8, color: AppColors.textMuted(context)),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: dotColor(c.intensidade),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          c.inicio,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                            color: Color(0xFF26215C),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEEEDFE),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            formatarDataExibicao(c.data),
-                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF534AB7)),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 1),
-                                    Text(
-                                      'Duração: ${extrairDuracao(c.observacoes)}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF888780),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: badgeBg(c.intensidade),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  c.intensidade,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                    color: badgeText(c.intensidade),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
+                          ...grupo.value.map((c) => _linhaContracao(context, c)),
+                          const SizedBox(height: 6),
+                        ];
                       }),
                   ],
                 ),
               ),
-              navBar(),
+              navBar(context),
             ],
           ),
         ),
@@ -465,33 +386,15 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(
-            valor,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(valor, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
           const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color.fromRGBO(255, 255, 255, 0.6),
-              fontSize: 10,
-            ),
-          ),
+          Text(label, style: const TextStyle(color: Color.fromRGBO(255, 255, 255, 0.6), fontSize: 10)),
         ],
       ),
     );
   }
 
   Widget _divider() {
-    return Container(
-      width: 1,
-      height: 36,
-      color: const Color.fromRGBO(255, 255, 255, 0.2),
-    );
+    return Container(width: 1, height: 36, color: const Color.fromRGBO(255, 255, 255, 0.2));
   }
 }
-
