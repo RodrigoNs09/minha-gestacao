@@ -131,8 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final hoje = _contracoesDeHoje;
     if (hoje.isEmpty) return '—';
     final ultima = hoje.last; // já ordenado, a última é a mais recente de hoje
-    final match = RegExp(r'Duração:\s*([0-9]{2}:[0-9]{2})').firstMatch(ultima.observacoes);
-    return match?.group(1) ?? '—';
+    return ultima.duracaoFormatada ?? '—';
   }
 
   String get intervaloMedio {

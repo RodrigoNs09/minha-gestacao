@@ -14,32 +14,55 @@ class ContracoesStorage {
         .collection('contracoes');
   }
 
-  static Future<void> salvarContracoes(List<Contracao> contracoes) async {
+  /// Grava uma contração nova como um documento próprio.
+  ///
+  /// Uma única operação `set` em um caminho que ainda não existe na coleção.
+  /// Não enumera, não apaga e não toca em nenhum outro documento — substitui
+  /// o antigo `salvarContracoes`, que apagava a coleção inteira e a reescrevia
+  /// a partir da memória a cada save.
+  ///
+  /// O identificador é gerado no cliente por `colecao.doc().id`, sem
+  /// round-trip, e devolvido junto com a contração. Some o `id` prévio é
+  /// reaproveitado quando presente, para que uma retentativa reescreva o
+  /// mesmo documento em vez de criar um duplicado.
+  ///
+  /// Retorna `null` quando não há sessão ativa. O chamador precisa tratar
+  /// esse caso: antes, a ausência de usuário virava um no-op silencioso e a
+  /// tela ainda anunciava sucesso.
+  ///
+  /// Nota: `set` só resolve o Future após confirmação do servidor. Offline,
+  /// a escrita fica enfileirada no cache local e o `await` permanece pendente
+  /// — comportamento idêntico ao do `batch.commit()` anterior.
+  static Future<Contracao?> adicionar(Contracao nova) async {
     final colecao = _colecao;
-    if (colecao == null) return; // usuário não logado
+    if (colecao == null) return null; // usuário não logado
 
-    // Apaga tudo que existe e reescreve a lista inteira
-    // (simples e suficiente para o volume de dados desse app)
-    final batch = FirebaseFirestore.instance.batch();
-
-    final existentes = await colecao.get();
-    for (final doc in existentes.docs) {
-      batch.delete(doc.reference);
-    }
-
-    for (final c in contracoes) {
-      final novoDoc = colecao.doc();
-      batch.set(novoDoc, c.toMap());
-    }
-
-    await batch.commit();
+    final id = nova.id ?? colecao.doc().id;
+    final salva = nova.comId(id);
+    await colecao.doc(id).set(salva.toMap());
+    return salva;
   }
 
+  /// Caminho canônico de leitura.
+  ///
+  /// Usa [Contracao.fromDoc], que adota `doc.id` como identidade. Até aqui a
+  /// leitura chamava `Contracao.fromMap(doc.data())` e descartava o `doc.id`,
+  /// jogando fora um identificador que já existia no Firestore.
+  ///
+  /// Compatibilidade: documentos no esquema legado (sem o campo
+  /// `duracaoSegundos`) continuam funcionando — o construtor de [Contracao]
+  /// deriva a duração do prefixo "Duração: MM:SS" em `observacoes`. A
+  /// derivação acontece apenas em memória; nada é gravado de volta.
+  ///
+  /// ATENÇÃO para quem for mexer na gravação: o `id` devolvido aqui é
+  /// estável. Desde que [adicionar] substituiu o antigo delete-all, nenhum
+  /// documento é recriado com auto-ID novo — o identificador de um registro
+  /// não muda mais entre sessões.
   static Future<List<Contracao>> carregarContracoes() async {
     final colecao = _colecao;
     if (colecao == null) return [];
 
     final snapshot = await colecao.get();
-    return snapshot.docs.map((doc) => Contracao.fromMap(doc.data())).toList();
+    return snapshot.docs.map((doc) => Contracao.fromDoc(doc)).toList();
   }
 }

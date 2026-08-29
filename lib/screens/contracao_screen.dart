@@ -74,10 +74,16 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       observacoes: observacoesController.text.trim().isEmpty
           ? 'Duração: ${formatarTempo(_segundos)}'
           : 'Duração: ${formatarTempo(_segundos)} | ${observacoesController.text.trim()}',
+      // Valor medido pelo cronômetro, não derivado do texto acima.
+      duracaoSegundos: _segundos,
     );
 
-    listaContracoes.add(novaContracao);
-    await ContracoesStorage.salvarContracoes(listaContracoes);
+    // Grava um documento próprio e só então entra na lista em memória, já
+    // com o id devolvido pelo Firestore.
+    final salva = await ContracoesStorage.adicionar(novaContracao);
+    if (salva != null) {
+      listaContracoes.add(salva);
+    }
 
     setState(() {
       _emAndamento = false;
@@ -89,7 +95,13 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Contração salva com sucesso!')),
+      SnackBar(
+        content: Text(
+          salva != null
+              ? 'Contração salva com sucesso!'
+              : 'Não foi possível salvar: sessão expirada. Entre novamente.',
+        ),
+      ),
     );
   }
 

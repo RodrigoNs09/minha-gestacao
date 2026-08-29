@@ -125,12 +125,9 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     int validas = 0;
 
     for (final c in lista) {
-      final match =
-          RegExp(r'Duração:\s*([0-9]{2}):([0-9]{2})').firstMatch(c.observacoes);
-      if (match != null) {
-        final min = int.tryParse(match.group(1) ?? '0') ?? 0;
-        final seg = int.tryParse(match.group(2) ?? '0') ?? 0;
-        somaSegundos += (min * 60) + seg;
+      final duracao = c.duracaoSegundos;
+      if (duracao != null) {
+        somaSegundos += duracao;
         validas++;
       }
     }
@@ -176,13 +173,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       default:
         return const Color(0xFF1D9E75);
     }
-  }
-
-  String extrairDuracao(String observacoes) {
-    final match =
-        RegExp(r'Duração:\s*([0-9]{2}:[0-9]{2})').firstMatch(observacoes);
-    if (match != null) return match.group(1)!;
-    return '--:--';
   }
 
   Widget navBar(BuildContext context) {
@@ -236,7 +226,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                 Text(c.inicio,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
                 const SizedBox(height: 1),
-                Text('Duração: ${extrairDuracao(c.observacoes)}',
+                Text('Duração: ${c.duracaoFormatada ?? '--:--'}',
                     style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context))),
               ],
             ),
