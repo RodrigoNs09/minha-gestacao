@@ -56,7 +56,7 @@ class MinhaGestacaoApp extends StatelessWidget {
               }
               // Usuário logado — só agora é seguro checar o onboarding
               return FutureBuilder<bool>(
-                future: GestacaoStorage.jaConfigurou(),
+                future: GestacaoStorage.restaurarDUM(),
                 builder: (context, snapConfig) {
                   if (snapConfig.connectionState == ConnectionState.waiting) {
                     return const Scaffold(

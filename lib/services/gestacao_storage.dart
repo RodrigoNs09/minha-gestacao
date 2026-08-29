@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../data/gestacao_data.dart';
 
 class GestacaoStorage {
   static const String _campo = 'gestacao_dum';
@@ -35,8 +36,12 @@ class GestacaoStorage {
     return DateTime.tryParse(valor);
   }
 
-  static Future<bool> jaConfigurou() async {
+  // Carrega a DUM persistida e, se existir, sincroniza gestacaoAtual com ela.
+  static Future<bool> restaurarDUM() async {
     final dum = await carregarDUM();
+    if (dum != null) {
+      atualizarDUM(dum);
+    }
     return dum != null;
   }
 }

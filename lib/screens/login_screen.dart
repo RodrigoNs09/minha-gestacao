@@ -54,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // Login deu certo — navega direto, sem depender só do StreamBuilder
-    final jaConfigurou = await GestacaoStorage.jaConfigurou();
+    final jaConfigurou = await GestacaoStorage.restaurarDUM();
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
