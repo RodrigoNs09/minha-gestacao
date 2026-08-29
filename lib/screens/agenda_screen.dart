@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/consultas_data.dart';
 import '../models/consulta.dart';
 import '../services/consultas_storage.dart';
+import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 
 class AgendaScreen extends StatefulWidget {
@@ -19,8 +20,15 @@ class _AgendaScreenState extends State<AgendaScreen> {
   }
 
   Future<void> _carregar() async {
-    final dados = await ConsultasStorage.carregarConsultas();
-    setState(() => listaConsultas = dados);
+    try {
+      final dados = await ConsultasStorage.carregarConsultas();
+      setState(() => listaConsultas = dados);
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+    }
   }
 
   List<Consulta> get _proximas {

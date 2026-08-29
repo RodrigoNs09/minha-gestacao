@@ -187,10 +187,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _recarregar() async {
-    final dados = await ContracoesStorage.carregarContracoes();
-    setState(() {
-      listaContracoes = dados;
-    });
+    try {
+      final dados = await ContracoesStorage.carregarContracoes();
+      setState(() {
+        listaContracoes = dados;
+      });
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+    }
   }
 
   Future<void> abrirTela(BuildContext context, Widget screen) async {

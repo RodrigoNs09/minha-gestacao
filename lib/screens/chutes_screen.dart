@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/chutes_data.dart';
 import '../models/chute_sessao.dart';
 import '../services/chutes_storage.dart';
+import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 
 const int _metaChutes = 10;
@@ -35,18 +36,25 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
   }
 
   Future<void> _carregar() async {
-    final dados = await ChutesStorage.carregarSessoes();
-    setState(() => listaChutes = dados);
+    try {
+      final dados = await ChutesStorage.carregarSessoes();
+      setState(() => listaChutes = dados);
 
-    final progresso = await ChutesStorage.carregarProgressoAtual();
-    if (progresso != null && progresso['data'] == _hoje()) {
-      setState(() {
-        _chutesAtuais = progresso['chutes'];
-        _inicioSessao = DateTime.tryParse(progresso['horaInicio']);
-      });
-    } else if (progresso != null) {
-      // Progresso de outro dia — descarta
-      await ChutesStorage.limparProgressoAtual();
+      final progresso = await ChutesStorage.carregarProgressoAtual();
+      if (progresso != null && progresso['data'] == _hoje()) {
+        setState(() {
+          _chutesAtuais = progresso['chutes'];
+          _inicioSessao = DateTime.tryParse(progresso['horaInicio']);
+        });
+      } else if (progresso != null) {
+        // Progresso de outro dia — descarta
+        await ChutesStorage.limparProgressoAtual();
+      }
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
     }
   }
 

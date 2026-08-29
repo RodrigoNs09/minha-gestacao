@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/sintomas_data.dart';
 import '../models/registro_sintomas.dart';
+import '../services/firestore_error.dart';
 import '../services/sintomas_storage.dart';
 import '../theme/app_theme.dart';
 
@@ -43,20 +44,27 @@ class _SintomasScreenState extends State<SintomasScreen> {
   }
 
   Future<void> _carregar() async {
-    final dados = await SintomasStorage.carregarRegistros();
-    setState(() => listaSintomas = dados);
+    try {
+      final dados = await SintomasStorage.carregarRegistros();
+      setState(() => listaSintomas = dados);
 
-    final hoje = _hoje();
-    final registroHoje = listaSintomas.where((r) => r.data == hoje).toList();
-    if (registroHoje.isNotEmpty) {
-      final r = registroHoje.first;
-      setState(() {
-        _humorSelecionado = r.humor;
-        _sintomasSelecionados.addAll(r.sintomas);
-        if (r.peso != null) {
-          _pesoController.text = r.peso.toString();
-        }
-      });
+      final hoje = _hoje();
+      final registroHoje = listaSintomas.where((r) => r.data == hoje).toList();
+      if (registroHoje.isNotEmpty) {
+        final r = registroHoje.first;
+        setState(() {
+          _humorSelecionado = r.humor;
+          _sintomasSelecionados.addAll(r.sintomas);
+          if (r.peso != null) {
+            _pesoController.text = r.peso.toString();
+          }
+        });
+      }
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
     }
   }
 
