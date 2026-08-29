@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/contracao.dart';
 import '../data/contracoes_data.dart';
 import '../services/contracoes_storage.dart';
+import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 
 class ContracaoScreen extends StatefulWidget {
@@ -17,6 +18,8 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
   int _segundos = 0;
   bool _emAndamento = false;
   DateTime? _inicioDateTime;
+  bool _salvando = false;
+  String? _idPendente;
 
   String intensidade = 'Forte';
   final TextEditingController observacoesController = TextEditingController();
@@ -58,13 +61,20 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       return;
     }
 
+    if (_salvando) return; // já existe uma tentativa em andamento
+
     _timer?.cancel();
     final fimDateTime = DateTime.now();
 
     final dataRegistro =
         '${_inicioDateTime!.year}-${_inicioDateTime!.month.toString().padLeft(2, '0')}-${_inicioDateTime!.day.toString().padLeft(2, '0')}';
 
+    // Reaproveita o mesmo id entre tentativas: um retry após falha sobrescreve
+    // o mesmo documento em vez de criar um novo.
+    _idPendente ??= ContracoesStorage.novoId();
+
     final novaContracao = Contracao(
+      id: _idPendente,
       data: dataRegistro,
       inicio:
           '${_inicioDateTime!.hour.toString().padLeft(2, '0')}:${_inicioDateTime!.minute.toString().padLeft(2, '0')}',
@@ -78,27 +88,45 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       duracaoSegundos: _segundos,
     );
 
-    // Grava um documento próprio e só então entra na lista em memória, já
-    // com o id devolvido pelo Firestore.
-    final salva = await ContracoesStorage.adicionar(novaContracao);
-    if (salva != null) {
-      listaContracoes.add(salva);
+    setState(() => _salvando = true);
+
+    Contracao? salva;
+    Object? erro;
+    try {
+      // Grava um documento próprio e só então entra na lista em memória, já
+      // com o id devolvido pelo Firestore.
+      salva = await ContracoesStorage.adicionar(novaContracao);
+    } catch (e) {
+      erro = e;
     }
 
-    setState(() {
-      _emAndamento = false;
-      _segundos = 0;
-      _inicioDateTime = null;
-      intensidade = 'Forte';
-      observacoesController.clear();
-    });
-
     if (!mounted) return;
+
+    if (salva != null) {
+      listaContracoes.add(salva);
+      setState(() {
+        _emAndamento = false;
+        _segundos = 0;
+        _inicioDateTime = null;
+        intensidade = 'Forte';
+        observacoesController.clear();
+        _salvando = false;
+        _idPendente = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contração salva com sucesso!')),
+      );
+      return;
+    }
+
+    // Falhou (sessão expirada ou erro do Firestore): cronômetro, intensidade,
+    // observações e o id pendente ficam intactos para permitir nova tentativa.
+    setState(() => _salvando = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          salva != null
-              ? 'Contração salva com sucesso!'
+          erro != null
+              ? FirestoreErro.mensagemAmigavel(erro)
               : 'Não foi possível salvar: sessão expirada. Entre novamente.',
         ),
       ),
@@ -332,7 +360,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                         ),
                         const SizedBox(height: 10),
                         GestureDetector(
-                          onTap: pararESalvarContracao,
+                          onTap: _salvando ? null : pararESalvarContracao,
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
@@ -343,7 +371,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                               ),
                             ),
                             child: Text(
-                              '■ Parar e Salvar',
+                              _salvando ? 'Salvando...' : '■ Parar e Salvar',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: AppTheme.primaryPurple,

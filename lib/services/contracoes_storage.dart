@@ -14,6 +14,12 @@ class ContracoesStorage {
         .collection('contracoes');
   }
 
+  /// Gera um id de documento novo, sem round-trip de rede — permite à tela
+  /// reaproveitar o mesmo id em retries de uma mesma contração, tornando o
+  /// `set()` de [adicionar] idempotente em vez de criar um documento por
+  /// tentativa. Retorna `null` quando não há sessão ativa.
+  static String? novoId() => _colecao?.doc().id;
+
   /// Grava uma contração nova como um documento próprio.
   ///
   /// Uma única operação `set` em um caminho que ainda não existe na coleção.
