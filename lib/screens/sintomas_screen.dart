@@ -68,41 +68,88 @@ class _SintomasScreenState extends State<SintomasScreen> {
     }
   }
 
+  /// Reconstrói o registro de hoje a partir do estado atual da tela e
+  /// persiste. Se a gravação falhar, desfaz a mutação de [listaSintomas]
+  /// (restaura o registro anterior de hoje) e relança — quem chamou decide
+  /// como reverter o próprio estado (humor/sintomas) e informar o erro.
   Future<void> _salvarRegistroDeHoje() async {
     final hoje = _hoje();
+    final registroAnterior = listaSintomas.where((r) => r.data == hoje).toList();
     listaSintomas.removeWhere((r) => r.data == hoje);
 
     final peso = double.tryParse(_pesoController.text.replaceAll(',', '.'));
 
-    listaSintomas.add(RegistroSintomas(
+    final novoRegistro = RegistroSintomas(
       data: hoje,
       humor: _humorSelecionado,
       sintomas: _sintomasSelecionados.toList(),
       peso: peso,
-    ));
+    );
+    listaSintomas.add(novoRegistro);
 
-    await SintomasStorage.salvarRegistros(listaSintomas);
-    setState(() {});
+    try {
+      await SintomasStorage.salvarRegistros(listaSintomas);
+    } catch (_) {
+      listaSintomas.remove(novoRegistro);
+      listaSintomas.addAll(registroAnterior);
+      rethrow;
+    }
+
+    if (mounted) setState(() {});
   }
 
-  void _selecionarHumor(int index) {
+  Future<void> _selecionarHumor(int index) async {
+    final humorAnterior = _humorSelecionado;
     setState(() => _humorSelecionado = index);
-    _salvarRegistroDeHoje();
+    try {
+      await _salvarRegistroDeHoje();
+    } catch (erro) {
+      if (!mounted) return;
+      setState(() => _humorSelecionado = humorAnterior);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+    }
   }
 
-  void _alternarSintoma(String id) {
+  Future<void> _alternarSintoma(String id) async {
+    final estavaMarcado = _sintomasSelecionados.contains(id);
     setState(() {
-      if (_sintomasSelecionados.contains(id)) {
+      if (estavaMarcado) {
         _sintomasSelecionados.remove(id);
       } else {
         _sintomasSelecionados.add(id);
       }
     });
-    _salvarRegistroDeHoje();
+    try {
+      await _salvarRegistroDeHoje();
+    } catch (erro) {
+      if (!mounted) return;
+      setState(() {
+        if (estavaMarcado) {
+          _sintomasSelecionados.add(id);
+        } else {
+          _sintomasSelecionados.remove(id);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+    }
   }
 
   Future<void> _salvarPeso() async {
-    await _salvarRegistroDeHoje();
+    try {
+      await _salvarRegistroDeHoje();
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     setState(() => _pesoSalvo = true);
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) setState(() => _pesoSalvo = false);

@@ -20,13 +20,23 @@ class ChutesStorage {
     return FirebaseFirestore.instance.collection('usuarios').doc(uid);
   }
 
-  /// Adiciona apenas UMA sessão nova, sem apagar/recriar o resto.
+  /// Gera um id de documento novo, sem round-trip de rede — permite à tela
+  /// reaproveitar o mesmo id em retries de uma mesma sessão de chutes.
+  static String? novoId() => _colecao?.doc().id;
+
+  /// Grava (ou sobrescreve) apenas UMA sessão, sem apagar/recriar o resto.
   /// Muito mais eficiente que salvarSessoes() para o caso comum
   /// de "completou uma sessão de chutes".
-  static Future<void> adicionarSessao(ChuteSessao sessao) async {
+  ///
+  /// Passar o mesmo [id] em retries de uma mesma sessão torna a operação
+  /// idempotente — sobrescreve o mesmo documento em vez de criar outro.
+  /// Quando [id] não é informado, gera um novo (comportamento equivalente
+  /// ao antigo `colecao.add`).
+  static Future<void> adicionarSessao(ChuteSessao sessao, {String? id}) async {
     final colecao = _colecao;
     if (colecao == null) return;
-    await colecao.add(sessao.toMap());
+    final docId = id ?? colecao.doc().id;
+    await colecao.doc(docId).set(sessao.toMap());
   }
 
   /// Mantido para casos de sincronização completa (ex: se algum dia

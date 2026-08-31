@@ -17,6 +17,8 @@ class ChutesScreen extends StatefulWidget {
 class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderStateMixin {
   int _chutesAtuais = 0;
   DateTime? _inicioSessao;
+  bool _salvando = false;
+  String? _idSessaoPendente;
   late AnimationController _pulseController;
 
   @override
@@ -73,40 +75,76 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
   }
 
   Future<void> _registrarChute() async {
-    if (_chutesAtuais >= _metaChutes) return;
+    if (_chutesAtuais >= _metaChutes || _salvando) return;
 
     _inicioSessao ??= DateTime.now();
 
-    setState(() => _chutesAtuais++);
+    final chutesAntes = _chutesAtuais;
+    setState(() {
+      _chutesAtuais++;
+      _salvando = true;
+    });
 
-    // Salva o progresso a cada chute, para não perder se sair da tela
-    await ChutesStorage.salvarProgressoAtual(
-      chutes: _chutesAtuais,
-      data: _hoje(),
-      horaInicio: _inicioSessao!.toIso8601String(),
-    );
+    ChuteSessao? novaSessao;
 
-    if (_chutesAtuais >= _metaChutes) {
-      final fim = DateTime.now();
-      final novaSessao = ChuteSessao(
+    try {
+      // Salva o progresso a cada chute, para não perder se sair da tela
+      await ChutesStorage.salvarProgressoAtual(
+        chutes: _chutesAtuais,
         data: _hoje(),
-        horaInicio: _formatarHora(_inicioSessao!),
-        horaFim: _formatarHora(fim),
-        totalChutes: _metaChutes,
-        completa: true,
+        horaInicio: _inicioSessao!.toIso8601String(),
       );
 
-      listaChutes.add(novaSessao);
-      await ChutesStorage.adicionarSessao(novaSessao);
-      await ChutesStorage.limparProgressoAtual();
+      if (_chutesAtuais >= _metaChutes) {
+        // Reaproveita o mesmo id entre tentativas: um retry após falha
+        // sobrescreve a mesma sessão em vez de criar outra.
+        _idSessaoPendente ??= ChutesStorage.novoId();
 
+        final fim = DateTime.now();
+        novaSessao = ChuteSessao(
+          data: _hoje(),
+          horaInicio: _formatarHora(_inicioSessao!),
+          horaFim: _formatarHora(fim),
+          totalChutes: _metaChutes,
+          completa: true,
+        );
+
+        listaChutes.add(novaSessao);
+        await ChutesStorage.adicionarSessao(novaSessao, id: _idSessaoPendente);
+        await ChutesStorage.limparProgressoAtual();
+      }
+    } catch (erro) {
+      // Desfaz a mutação otimista: os chutes anteriores (já persistidos)
+      // são preservados, só este toque volta atrás. _idSessaoPendente NÃO
+      // é limpo, para que o próximo toque reaproveite o mesmo id.
+      if (novaSessao != null) {
+        listaChutes.remove(novaSessao);
+      }
+      if (!mounted) return;
+      setState(() {
+        _chutesAtuais = chutesAntes;
+        _salvando = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    if (_chutesAtuais >= _metaChutes) {
       // Pequeno delay pra usuária ver a meta atingida antes de resetar
       await Future.delayed(const Duration(milliseconds: 1200));
       if (!mounted) return;
       setState(() {
         _chutesAtuais = 0;
         _inicioSessao = null;
+        _idSessaoPendente = null;
+        _salvando = false;
       });
+    } else {
+      setState(() => _salvando = false);
     }
   }
 
@@ -221,7 +259,7 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                     const SizedBox(height: 16),
                     Center(
                       child: GestureDetector(
-                        onTap: metaAtingida ? null : _registrarChute,
+                        onTap: (metaAtingida || _salvando) ? null : _registrarChute,
                         child: Container(
                           width: 130,
                           height: 130,

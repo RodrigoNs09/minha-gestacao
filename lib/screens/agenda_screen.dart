@@ -45,17 +45,47 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
   Future<void> _marcarComoRealizada(Consulta c) async {
     final index = listaConsultas.indexWhere((x) => x.id == c.id);
-    if (index != -1) {
-      listaConsultas[index] = c.copyWith(realizada: true);
+    if (index == -1) return;
+
+    final anterior = listaConsultas[index];
+    listaConsultas[index] = c.copyWith(realizada: true);
+
+    try {
       await ConsultasStorage.salvarConsultas(listaConsultas);
+    } catch (erro) {
+      listaConsultas[index] = anterior;
+      if (!mounted) return;
       setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+      return;
     }
+
+    if (!mounted) return;
+    setState(() {});
   }
 
-  Future<void> _excluirConsulta(Consulta c) async {
-    listaConsultas.removeWhere((x) => x.id == c.id);
-    await ConsultasStorage.salvarConsultas(listaConsultas);
-    setState(() {});
+  /// Tenta persistir a lista sem [c] antes de o Dismissible confirmar a
+  /// remoção. Não muta listaConsultas aqui — isso só acontece em
+  /// onDismissed, depois que a animação de saída já tiver terminado. Nunca
+  /// se readiciona um item depois que o Dismissible tiver confirmado o
+  /// dismiss: isso recriaria a mesma Key numa árvore que o framework já
+  /// tratou como removida. Em caso de falha, é o próprio Dismissible quem
+  /// reverte a posição do item, ao receber `false` deste callback.
+  Future<bool> _excluirConsulta(Consulta c) async {
+    final semItem = List<Consulta>.from(listaConsultas)..removeWhere((x) => x.id == c.id);
+
+    try {
+      await ConsultasStorage.salvarConsultas(semItem);
+      return true;
+    } catch (erro) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+      return false;
+    }
   }
 
   Future<void> _abrirFormularioNovaConsulta() async {
@@ -63,6 +93,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
     final profissionalController = TextEditingController();
     DateTime dataEscolhida = DateTime.now().add(const Duration(days: 7));
     TimeOfDay horaEscolhida = const TimeOfDay(hour: 10, minute: 0);
+    bool salvando = false;
 
     final salvou = await showModalBottomSheet<bool>(
       context: context,
@@ -181,7 +212,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(ctx, false),
+                          onPressed: salvando ? null : () => Navigator.pop(ctx, false),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             side: BorderSide(color: AppColors.border(ctx)),
@@ -193,23 +224,38 @@ class _AgendaScreenState extends State<AgendaScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () async {
-                            if (tituloController.text.trim().isEmpty) return;
+                          onPressed: salvando
+                              ? null
+                              : () async {
+                                  if (tituloController.text.trim().isEmpty) return;
 
-                            final novaConsulta = Consulta(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(),
-                              titulo: tituloController.text.trim(),
-                              profissional: profissionalController.text.trim(),
-                              data:
-                                  '${dataEscolhida.year}-${dataEscolhida.month.toString().padLeft(2, '0')}-${dataEscolhida.day.toString().padLeft(2, '0')}',
-                              hora:
-                                  '${horaEscolhida.hour.toString().padLeft(2, '0')}:${horaEscolhida.minute.toString().padLeft(2, '0')}',
-                            );
+                                  final novaConsulta = Consulta(
+                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                    titulo: tituloController.text.trim(),
+                                    profissional: profissionalController.text.trim(),
+                                    data:
+                                        '${dataEscolhida.year}-${dataEscolhida.month.toString().padLeft(2, '0')}-${dataEscolhida.day.toString().padLeft(2, '0')}',
+                                    hora:
+                                        '${horaEscolhida.hour.toString().padLeft(2, '0')}:${horaEscolhida.minute.toString().padLeft(2, '0')}',
+                                  );
 
-                            listaConsultas.add(novaConsulta);
-                            await ConsultasStorage.salvarConsultas(listaConsultas);
-                            if (ctx.mounted) Navigator.pop(ctx, true);
-                          },
+                                  setModalState(() => salvando = true);
+
+                                  final listaTentativa = List<Consulta>.from(listaConsultas)..add(novaConsulta);
+                                  try {
+                                    await ConsultasStorage.salvarConsultas(listaTentativa);
+                                  } catch (erro) {
+                                    if (!ctx.mounted) return;
+                                    setModalState(() => salvando = false);
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+                                    );
+                                    return;
+                                  }
+
+                                  listaConsultas.add(novaConsulta);
+                                  if (ctx.mounted) Navigator.pop(ctx, true);
+                                },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryPurple,
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -252,7 +298,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
         decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(14)),
         child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
       ),
-      onDismissed: (_) => _excluirConsulta(c),
+      confirmDismiss: (_) => _excluirConsulta(c),
+      onDismissed: (_) => setState(() => listaConsultas.removeWhere((x) => x.id == c.id)),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
