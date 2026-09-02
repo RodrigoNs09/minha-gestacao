@@ -8,6 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/historico_screen.dart';
 import 'screens/assistente_screen.dart';
 import 'screens/chutes_screen.dart';
+import 'screens/historico_chutes_screen.dart';
 import 'screens/sintomas_screen.dart';
 import 'screens/agenda_screen.dart';
 import 'data/contracoes_data.dart';
@@ -666,6 +667,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           screen: const HistoricoScreen(),
                           iconBg: AppColors.statPurple(context),
                           iconColor: const Color(0xFF534AB7),
+                        ),
+                        menuCard(
+                          context: context,
+                          icon: Icons.directions_walk_rounded,
+                          title: 'Histórico de Chutes',
+                          subtitle: 'Veja suas sessões registradas',
+                          screen: const HistoricoChutesScreen(),
+                          iconBg: AppColors.statGreen(context),
+                          iconColor: const Color(0xFF1D9E75),
                         ),
                         menuCard(
                           context: context,
