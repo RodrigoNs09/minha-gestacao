@@ -310,9 +310,15 @@ class VacinasEngine {
           historico: historico,
         );
 
-      // Etapas seguintes. Até lá, a engine não afirma nada sobre estas.
-      case RegraDependeHistorico():
       case RegraDependeTemporada():
+        return _avaliarTemporada(
+          regra: regra,
+          historico: historico,
+          temporadaVigente: temporadaInfluenza,
+        );
+
+      // Etapa seguinte. Até lá, a engine não afirma nada sobre esta.
+      case RegraDependeHistorico():
         return StatusVacinacao(
           vacinaCodigo: regra.codigo,
           estado: EstadoVacina.verificarHistorico,
@@ -322,6 +328,90 @@ class VacinasEngine {
           motivo: 'avaliação condicional ainda não implementada nesta versão',
         );
     }
+  }
+
+  /// Avalia uma regra organizada por temporada — o caso da influenza no
+  /// PNI-2026.
+  ///
+  /// A temporada vigente entra pronta, vinda de quem chamou. A engine não a
+  /// calcula, não a deduz do ano civil, da DUM ou da data de aplicação, e
+  /// não interpreta o conteúdo do identificador: a comparação é igualdade
+  /// estrita de String, e `'2026'` é diferente de `'2026 '`.
+  ///
+  /// [dataAplicacao] não participa de nenhuma decisão aqui. Sem limites de
+  /// início e fim de temporada — que o calendário deliberadamente não
+  /// define — uma data não diz a que temporada pertence. O vínculo vem
+  /// exclusivamente do snapshot gravado no registro.
+  static StatusVacinacao _avaliarTemporada({
+    required RegraDependeTemporada regra,
+    required List<RegistroVacinacao> historico,
+    required String? temporadaVigente,
+  }) {
+    if (regra.dosesPorTemporada <= 0) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'regra sem doses por temporada declaradas',
+      );
+    }
+
+    // Sem saber qual é a temporada vigente, "1 dose por temporada" é
+    // inavaliável. A engine diz isso em vez de supor uma temporada.
+    if (temporadaVigente == null) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'temporada vigente não informada',
+      );
+    }
+
+    // Igualdade estrita: registros de outra temporada, ou sem temporada
+    // conhecida, simplesmente não pertencem a esta — não provam aplicação
+    // nem bloqueiam a avaliação.
+    final daTemporada = historico
+        .where((r) => r.vacinaCodigo == regra.codigo)
+        .where((r) => r.temporadaNoRegistro == temporadaVigente)
+        .toList(growable: false);
+
+    final aplicadas = daTemporada.where(_declaraDoseAplicada).length;
+    if (aplicadas >= regra.dosesPorTemporada) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.registrada,
+        mensagem: mensagemDoseRegistrada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
+        podeRegistrar: false,
+        motivo: 'doses da temporada $temporadaVigente registradas pela '
+            'usuária: $aplicadas de ${regra.dosesPorTemporada}',
+      );
+    }
+
+    if (daTemporada.any(_temSituacaoIndeterminada)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta temporada sem situação determinada',
+      );
+    }
+
+    return StatusVacinacao(
+      vacinaCodigo: regra.codigo,
+      estado: EstadoVacina.periodoRecomendado,
+      mensagem: mensagemPeriodoRecomendado,
+      nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+      podeRegistrar: true,
+      motivo: 'sem dose declarada na temporada $temporadaVigente: '
+          '$aplicadas de ${regra.dosesPorTemporada}',
+    );
   }
 
   /// Avalia uma regra de dose por gestação com intervalo mínimo desde a

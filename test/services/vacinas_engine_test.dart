@@ -844,34 +844,383 @@ void main() {
     });
   });
 
-  group('Condicionais ainda não avaliadas (Etapas seguintes)', () {
-    test('não afirmam período recomendado', () {
+  group('Influenza — 1 dose por temporada', () {
+    const temporadaAtual = '2026';
+    const temporadaAnterior = '2025';
+
+    RegistroVacinacao doseInfluenza({
+      String? temporada,
+      SituacaoInformada situacao = SituacaoInformada.aplicadaComData,
+      DateTime? dataAplicacao,
+    }) {
+      return RegistroVacinacao(
+        vacinaCodigo: codigoInfluenza,
+        situacaoInformada: situacao,
+        versaoCalendario: versaoCalendarioPni2026,
+        temporadaNoRegistro: temporada,
+        dataAplicacao: dataAplicacao,
+      );
+    }
+
+    StatusVacinacao influenzaEm({
+      List<RegistroVacinacao> historico = const [],
+      String? temporada = temporadaAtual,
+    }) {
+      return statusDe(
+        avaliarEm(
+          diasGestacaoBruto: 200,
+          historico: historico,
+          temporadaInfluenza: temporada,
+        ),
+        codigoInfluenza,
+      );
+    }
+
+    test('1. temporada informada e sem histórico: período recomendado', () {
+      final influenza = influenzaEm();
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+      expect(influenza.mensagem, mensagemPeriodoRecomendado);
+    });
+
+    test('2. dose aplicada na temporada atual: REGISTRADA', () {
+      final influenza = influenzaEm(
+        historico: [doseInfluenza(temporada: temporadaAtual)],
+      );
+
+      expect(influenza.estado, EstadoVacina.registrada);
+      expect(influenza.mensagem, mensagemDoseRegistrada);
+      expect(influenza.podeRegistrar, isFalse);
+    });
+
+    test('3. dose com data desconhecida na temporada atual: REGISTRADA', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: temporadaAtual,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.registrada);
+    });
+
+    test('4. dose de temporada anterior não bloqueia a atual', () {
+      final influenza = influenzaEm(
+        historico: [doseInfluenza(temporada: temporadaAnterior)],
+      );
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('5. situação desconhecida na temporada atual: VERIFICAR_HISTORICO', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: temporadaAtual,
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.verificarHistorico);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+      expect(influenza.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('6. temporada vigente não informada: VERIFICAR_HISTORICO', () {
+      final influenza = influenzaEm(temporada: null);
+
+      expect(influenza.estado, EstadoVacina.verificarHistorico);
+      expect(influenza.estado, isNot(EstadoVacina.periodoRecomendado));
+      expect(influenza.motivo, contains('temporada vigente não informada'));
+    });
+
+    test('6b. sem temporada, nem uma dose registrada muda o resultado', () {
+      // A engine não deduz a temporada do registro para "descobrir" qual é
+      // a vigente.
+      final influenza = influenzaEm(
+        temporada: null,
+        historico: [doseInfluenza(temporada: temporadaAtual)],
+      );
+
+      expect(influenza.estado, EstadoVacina.verificarHistorico);
+    });
+
+    test('7. registro sem temporada não conta como dose da temporada atual', () {
+      final influenza = influenzaEm(
+        historico: [doseInfluenza(temporada: null)],
+      );
+
+      // Não prova aplicação nesta temporada, e também não bloqueia.
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+      expect(influenza.estado, isNot(EstadoVacina.verificarHistorico));
+    });
+
+    test('7b. situação desconhecida sem temporada não bloqueia', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: null,
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('8. quem informou que não recebeu: período recomendado', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: temporadaAtual,
+            situacao: SituacaoInformada.naoAplicadaInformado,
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('9. duas doses na mesma temporada com 1 prevista: REGISTRADA', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(temporada: temporadaAtual),
+          doseInfluenza(temporada: temporadaAtual),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.registrada);
+    });
+
+    test('11. a comparação de temporada é igualdade estrita', () {
+      // Espaço em branco e outro formato são temporadas diferentes: a
+      // engine não normaliza nem interpreta o identificador.
+      for (final outra in ['2026 ', ' 2026', '2026/2027', '2026-SUL', '']) {
+        final influenza = influenzaEm(
+          historico: [doseInfluenza(temporada: outra)],
+        );
+
+        expect(
+          influenza.estado,
+          EstadoVacina.periodoRecomendado,
+          reason: 'temporada do registro: "$outra"',
+        );
+      }
+    });
+
+    test('12. a data de aplicação não influencia a decisão', () {
+      final datas = <DateTime?>[
+        null,
+        DateTime(2020, 1, 1),
+        DateTime(2026, 4, 15),
+        DateTime(2099, 12, 31),
+      ];
+
+      for (final data in datas) {
+        final influenza = influenzaEm(
+          historico: [doseInfluenza(temporada: temporadaAtual, dataAplicacao: data)],
+        );
+
+        expect(influenza.estado, EstadoVacina.registrada, reason: 'data: $data');
+      }
+    });
+
+    test('12b. data recente de temporada anterior não vira dose atual', () {
+      // Data de aplicação dentro do ano da temporada vigente, mas snapshot
+      // de temporada anterior: vale o snapshot, não a data.
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: temporadaAnterior,
+            dataAplicacao: DateTime(2026, 4, 15),
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('13. mudar a temporada devolve a vacina ao período recomendado', () {
+      final historico = [doseInfluenza(temporada: temporadaAtual)];
+
+      // Mesma gestação, mesmo histórico: só a temporada vigente muda.
+      expect(
+        influenzaEm(historico: historico, temporada: temporadaAtual).estado,
+        EstadoVacina.registrada,
+      );
+      expect(
+        influenzaEm(historico: historico, temporada: '2027').estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('16. todas as situações informadas produzem o estado esperado', () {
+      const esperado = {
+        SituacaoInformada.aplicadaComData: EstadoVacina.registrada,
+        SituacaoInformada.aplicadaDataDesconhecida: EstadoVacina.registrada,
+        SituacaoInformada.naoAplicadaInformado: EstadoVacina.periodoRecomendado,
+        SituacaoInformada.situacaoDesconhecida: EstadoVacina.verificarHistorico,
+      };
+
+      // Cobre todos os valores do enum: se um valor novo aparecer, o teste
+      // falha por não estar mapeado.
+      expect(esperado.keys.toSet(), SituacaoInformada.values.toSet());
+
+      esperado.forEach((situacao, estado) {
+        final influenza = influenzaEm(
+          historico: [doseInfluenza(temporada: temporadaAtual, situacao: situacao)],
+        );
+
+        expect(influenza.estado, estado, reason: situacao.codigo);
+      });
+    });
+
+    test('a influenza não depende da idade gestacional', () {
+      final historico = [doseInfluenza(temporada: temporadaAtual)];
+
+      for (final dias in [0, 139, 140, 200, 294, -30, 400]) {
+        final influenza = statusDe(
+          avaliarEm(
+            diasGestacaoBruto: dias,
+            historico: historico,
+            temporadaInfluenza: temporadaAtual,
+          ),
+          codigoInfluenza,
+        );
+
+        expect(influenza.estado, EstadoVacina.registrada, reason: '$dias dias');
+      }
+    });
+
+    test('doses de outras vacinas não contam para a influenza', () {
+      final influenza = influenzaEm(
+        historico: [
+          RegistroVacinacao(
+            vacinaCodigo: codigoDtpa,
+            situacaoInformada: SituacaoInformada.aplicadaComData,
+            versaoCalendario: versaoCalendarioPni2026,
+            temporadaNoRegistro: temporadaAtual,
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.periodoRecomendado);
+    });
+  });
+
+  group('Influenza — dosesPorTemporada vem da regra', () {
+    const temporada = '2026';
+    const codigoFicticio = 'SAZONAL_DE_TESTE';
+
+    List<RegraCalendario> calendarioCom({required int dosesPorTemporada}) {
+      return [
+        RegraDependeTemporada(
+          codigo: codigoFicticio,
+          nomeExibicao: 'Sazonal de teste',
+          versaoCalendario: versaoCalendarioPni2026,
+          dosesPorTemporada: dosesPorTemporada,
+        ),
+      ];
+    }
+
+    StatusVacinacao avaliarCom({
+      required int dosesPorTemporada,
+      required int quantasDoses,
+    }) {
+      return VacinasEngine.avaliar(
+        diasGestacaoBruto: 200,
+        dum: dum,
+        dataAtual: dum.add(const Duration(days: 200)),
+        historico: List.generate(
+          quantasDoses,
+          (_) => RegistroVacinacao(
+            vacinaCodigo: codigoFicticio,
+            situacaoInformada: SituacaoInformada.aplicadaComData,
+            versaoCalendario: versaoCalendarioPni2026,
+            temporadaNoRegistro: temporada,
+          ),
+        ),
+        calendario: calendarioCom(dosesPorTemporada: dosesPorTemporada),
+        temporadaInfluenza: temporada,
+      ).single;
+    }
+
+    test('10. com 2 previstas, uma dose ainda não encerra', () {
+      expect(
+        avaliarCom(dosesPorTemporada: 2, quantasDoses: 1).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('10b. com 2 previstas, duas doses encerram', () {
+      expect(
+        avaliarCom(dosesPorTemporada: 2, quantasDoses: 2).estado,
+        EstadoVacina.registrada,
+      );
+    });
+
+    test('com 3 previstas, duas doses ainda não encerram', () {
+      expect(
+        avaliarCom(dosesPorTemporada: 3, quantasDoses: 2).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('doses por temporada não positivas: VERIFICAR_HISTORICO', () {
+      expect(
+        avaliarCom(dosesPorTemporada: 0, quantasDoses: 1).estado,
+        EstadoVacina.verificarHistorico,
+      );
+    });
+
+    test('o motivo cita o previsto pela regra, não um número fixo', () {
+      expect(
+        avaliarCom(dosesPorTemporada: 2, quantasDoses: 2).motivo,
+        contains('2'),
+      );
+    });
+  });
+
+  group('Condicionais ainda não avaliadas (Etapa seguinte)', () {
+    test('hepatite B e dT não afirmam período recomendado', () {
       final resultado = avaliarEm(diasGestacaoBruto: 200);
 
-      for (final codigo in [codigoHepatiteB, codigoDt, codigoInfluenza]) {
+      for (final codigo in [codigoHepatiteB, codigoDt]) {
         final status = statusDe(resultado, codigo);
         expect(status.estado, EstadoVacina.verificarHistorico, reason: codigo);
         expect(status.estado, isNot(EstadoVacina.periodoRecomendado), reason: codigo);
       }
     });
-
-    test('influenza sem temporada informada não é avaliada por conta própria', () {
-      final semTemporada = statusDe(
-        avaliarEm(diasGestacaoBruto: 200),
-        codigoInfluenza,
-      );
-
-      expect(semTemporada.estado, EstadoVacina.verificarHistorico);
-      expect(semTemporada.estado, isNot(EstadoVacina.periodoRecomendado));
-    });
   });
 
   group('Determinismo', () {
     test('mesmas entradas produzem exatamente o mesmo resultado', () {
-      final historico = [doseRegistrada(codigoDtpa, dumNoRegistro: dum)];
+      final historico = [
+        doseRegistrada(codigoDtpa, dumNoRegistro: dum),
+        RegistroVacinacao(
+          vacinaCodigo: codigoInfluenza,
+          situacaoInformada: SituacaoInformada.aplicadaComData,
+          versaoCalendario: versaoCalendarioPni2026,
+          temporadaNoRegistro: '2026',
+        ),
+      ];
 
-      final primeira = avaliarEm(diasGestacaoBruto: 200, historico: historico);
-      final segunda = avaliarEm(diasGestacaoBruto: 200, historico: historico);
+      final primeira = avaliarEm(
+        diasGestacaoBruto: 200,
+        historico: historico,
+        temporadaInfluenza: '2026',
+      );
+      final segunda = avaliarEm(
+        diasGestacaoBruto: 200,
+        historico: historico,
+        temporadaInfluenza: '2026',
+      );
 
       expect(primeira.length, segunda.length);
       for (var i = 0; i < primeira.length; i++) {
