@@ -1,0 +1,412 @@
+/// Motor de regras de vacinação da gestante.
+///
+/// Puro e determinístico: mesmas entradas, mesma saída, sempre. Não toca
+/// Firebase, Firestore, Flutter nem `BuildContext`, e **nunca** chama
+/// `DateTime.now()` — a data corrente entra como parâmetro. É o que permite
+/// testar "o que acontece exatamente na semana 20" sem depender do relógio
+/// da máquina, e o que permite testá-lo na infraestrutura de teste atual do
+/// projeto, que não tem mocks de Firestore.
+///
+/// A engine **calcula** estados; não os persiste. [StatusVacinacao] é
+/// resultado derivado, recomputado a cada avaliação — como `GestacaoInfo`,
+/// nunca vai para o Firestore.
+library;
+
+import '../data/vacinas_calendario_2026.dart';
+import '../models/registro_vacinacao.dart';
+
+/// Situação de uma vacina para uma gestante, num instante.
+///
+/// Sete estados aprovados na especificação funcional.
+enum EstadoVacina {
+  /// A janela ainda não abriu.
+  naoDisponivel('NAO_DISPONIVEL'),
+
+  /// A janela está aberta. Nunca significa "tome agora": a mensagem
+  /// associada orienta confirmar com a equipe de saúde.
+  periodoRecomendado('PERIODO_RECOMENDADO'),
+
+  /// Falta informação para determinar a situação com segurança.
+  verificarHistorico('VERIFICAR_HISTORICO'),
+
+  /// Há um intervalo mínimo a cumprir desde uma dose anterior.
+  aguardarIntervalo('AGUARDAR_INTERVALO'),
+
+  /// A usuária registrou a dose. Registro dela, não validação do sistema.
+  registrada('REGISTRADA'),
+
+  /// A indicação depende de avaliação de um profissional.
+  avaliacaoProfissional('AVALIACAO_PROFISSIONAL'),
+
+  /// A recomendação não se aplica.
+  naoIndicada('NAO_INDICADA');
+
+  const EstadoVacina(this.codigo);
+
+  /// Valor estável, independente do nome da constante em Dart.
+  final String codigo;
+}
+
+/// Quanto destaque a situação merece na interface.
+///
+/// Derivado do estado por um mapeamento explícito ([nivelDoEstado]), e não
+/// escolhido caso a caso na UI — é o que impede a interface de inventar
+/// urgência que a regra não tem.
+enum NivelAtencao {
+  /// Nada a fazer agora.
+  nenhum('NENHUM'),
+
+  /// Vale saber, sem ação imediata.
+  informativo('INFORMATIVO'),
+
+  /// Vale levar à equipe de saúde.
+  atencao('ATENCAO');
+
+  const NivelAtencao(this.codigo);
+
+  final String codigo;
+}
+
+/// Mapeamento explícito de estado para nível de atenção.
+NivelAtencao nivelDoEstado(EstadoVacina estado) {
+  switch (estado) {
+    case EstadoVacina.naoDisponivel:
+    case EstadoVacina.registrada:
+    case EstadoVacina.naoIndicada:
+      return NivelAtencao.nenhum;
+    case EstadoVacina.aguardarIntervalo:
+      return NivelAtencao.informativo;
+    case EstadoVacina.periodoRecomendado:
+    case EstadoVacina.verificarHistorico:
+    case EstadoVacina.avaliacaoProfissional:
+      return NivelAtencao.atencao;
+  }
+}
+
+/// Quando uma janela ainda fechada deve abrir.
+final class ProximaJanela {
+  /// Semana gestacional em que a janela abre.
+  final int semanaGestacional;
+
+  /// Data estimada de abertura, derivada da DUM. Estimativa aritmética,
+  /// não uma data marcada por ninguém.
+  final DateTime dataEstimada;
+
+  const ProximaJanela({
+    required this.semanaGestacional,
+    required this.dataEstimada,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProximaJanela &&
+      other.semanaGestacional == semanaGestacional &&
+      other.dataEstimada == dataEstimada;
+
+  @override
+  int get hashCode => Object.hash(semanaGestacional, dataEstimada);
+
+  @override
+  String toString() => 'semana $semanaGestacional ($dataEstimada)';
+}
+
+/// Resultado da avaliação de uma vacina. Derivado, nunca persistido.
+final class StatusVacinacao {
+  final String vacinaCodigo;
+  final EstadoVacina estado;
+
+  /// Texto para a usuária. Nunca prescritivo.
+  final String mensagem;
+
+  final NivelAtencao nivelAtencao;
+
+  /// Preenchido quando a janela ainda não abriu e há uma data prevista.
+  final ProximaJanela? proximaJanela;
+
+  /// Se faz sentido oferecer o registro de uma dose agora.
+  final bool podeRegistrar;
+
+  /// Por que a engine chegou a este estado. Diagnóstico interno — serve
+  /// para depuração e para testes, não é texto de interface.
+  final String motivo;
+
+  const StatusVacinacao({
+    required this.vacinaCodigo,
+    required this.estado,
+    required this.mensagem,
+    required this.nivelAtencao,
+    required this.podeRegistrar,
+    required this.motivo,
+    this.proximaJanela,
+  });
+
+  @override
+  String toString() => '$vacinaCodigo: ${estado.codigo} ($motivo)';
+}
+
+// ── Mensagens da engine ─────────────────────────────────────────────────
+//
+// A mensagem de período recomendado vem do calendário
+// ([mensagemPeriodoRecomendado]), porque é texto aprovado na especificação.
+// As demais descrevem estados que a especificação não redigiu, e seguem o
+// mesmo princípio: nunca afirmam conduta, nunca dizem "validada".
+
+/// Registro é declaração da usuária, não validação do sistema.
+const String mensagemDoseRegistrada = 'Registrada por você.';
+
+const String mensagemJanelaNaoAberta =
+    'O período recomendado para esta vacina ainda não começou nesta '
+    'gestação.';
+
+const String mensagemGestacaoIndeterminada =
+    'Não foi possível determinar a idade gestacional a partir da data '
+    'informada. Confirme as orientações com a equipe de saúde.';
+
+const String mensagemAvaliacaoProfissional =
+    'Esta vacina depende de avaliação da equipe de saúde para a sua '
+    'situação.';
+
+const String mensagemVerificarHistorico =
+    'Não é possível determinar esta situação com as informações '
+    'disponíveis. Confirme seu histórico com a equipe de saúde.';
+
+// ── Faixa gestacional plausível ─────────────────────────────────────────
+
+/// Menor valor de dias de gestação que a engine considera interpretável.
+///
+/// Abaixo disso a DUM está no futuro, e nada pode ser afirmado.
+const int diasGestacaoMinimoPlausivel = 0;
+
+/// Maior valor de dias de gestação que a engine considera interpretável.
+///
+/// 294 dias são 42 semanas — o mesmo teto que `GestacaoInfo.semanaAtual`
+/// já usa no app. A diferença é que aqui o valor não é *clampeado*: acima
+/// dele a engine declara a gestação indeterminada em vez de fingir que são
+/// 42 semanas.
+const int diasGestacaoMaximoPlausivel = 294;
+
+/// Se [diasGestacaoBruto] cai numa faixa que permite alguma afirmação.
+bool gestacaoPlausivel(int diasGestacaoBruto) =>
+    diasGestacaoBruto >= diasGestacaoMinimoPlausivel &&
+    diasGestacaoBruto <= diasGestacaoMaximoPlausivel;
+
+/// Semana gestacional a partir dos dias brutos, **sem clamp**.
+///
+/// Semana 20 começa no dia 140. Não usar `GestacaoInfo.semanaAtual` aqui: o
+/// clamp de lá esconde exatamente os casos que esta engine precisa detectar.
+int semanaGestacionalDe(int diasGestacaoBruto) => diasGestacaoBruto ~/ 7;
+
+/// Motor de avaliação.
+class VacinasEngine {
+  const VacinasEngine._();
+
+  /// Avalia todas as regras do [calendario] para uma gestante.
+  ///
+  /// [diasGestacaoBruto] deve vir **sem clamp** — é a diferença em dias
+  /// entre [dataAtual] e [dum], como ela for, inclusive negativa.
+  ///
+  /// [temporadaInfluenza] identifica a temporada vigente de influenza, se
+  /// conhecida. `null` significa temporada indeterminada: a engine não a
+  /// calcula, nem deduz do ano civil. Sem essa informação, a influenza não
+  /// pode ser avaliada — e a engine diz isso, em vez de supor.
+  static List<StatusVacinacao> avaliar({
+    required int diasGestacaoBruto,
+    required DateTime dum,
+    required DateTime dataAtual,
+    required List<RegistroVacinacao> historico,
+    required List<RegraCalendario> calendario,
+    String? temporadaInfluenza,
+  }) {
+    return [
+      for (final regra in calendario)
+        _avaliarRegra(
+          regra: regra,
+          diasGestacaoBruto: diasGestacaoBruto,
+          dum: dum,
+          dataAtual: dataAtual,
+          historico: historico,
+          temporadaInfluenza: temporadaInfluenza,
+        ),
+    ];
+  }
+
+  static StatusVacinacao _avaliarRegra({
+    required RegraCalendario regra,
+    required int diasGestacaoBruto,
+    required DateTime dum,
+    required DateTime dataAtual,
+    required List<RegistroVacinacao> historico,
+    required String? temporadaInfluenza,
+  }) {
+    // O switch é exaustivo sobre a hierarquia selada e trata cada tipo em
+    // um único lugar — não há caminho de exceção nem ramo alcançável sem
+    // resposta. Avaliação profissional é o primeiro caso justamente para
+    // deixar explícito que nenhuma condição de gestação ou histórico a
+    // desvia para outro estado.
+    switch (regra) {
+      case RegraAvaliacaoProfissional():
+        return StatusVacinacao(
+          vacinaCodigo: regra.codigo,
+          estado: EstadoVacina.avaliacaoProfissional,
+          mensagem: mensagemAvaliacaoProfissional,
+          nivelAtencao: nivelDoEstado(EstadoVacina.avaliacaoProfissional),
+          podeRegistrar: true,
+          motivo: 'regra excepcional: indicação depende de avaliação profissional',
+        );
+
+      case RegraJanelaSemana():
+        return _avaliarJanelaSemana(
+          regra: regra,
+          diasGestacaoBruto: diasGestacaoBruto,
+          dum: dum,
+          historico: historico,
+        );
+
+      // Etapa 3C. Até lá, a engine não afirma nada sobre estas regras.
+      case RegraDependeHistorico():
+      case RegraDependeTemporada():
+      case RegraDependeIntervaloUltimaDose():
+        return StatusVacinacao(
+          vacinaCodigo: regra.codigo,
+          estado: EstadoVacina.verificarHistorico,
+          mensagem: mensagemVerificarHistorico,
+          nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+          podeRegistrar: true,
+          motivo: 'avaliação condicional ainda não implementada nesta versão',
+        );
+    }
+  }
+
+  static StatusVacinacao _avaliarJanelaSemana({
+    required RegraJanelaSemana regra,
+    required int diasGestacaoBruto,
+    required DateTime dum,
+    required List<RegistroVacinacao> historico,
+  }) {
+    // Só registros vinculados a esta gestação entram na avaliação. Um
+    // registro histórico sem vínculo não prova aplicação nem bloqueia a
+    // janela atual — ele simplesmente não diz nada sobre esta gestação.
+    final registrosDestaGestacao = historico
+        .where((r) => r.vacinaCodigo == regra.codigo)
+        .where((r) => _pertenceAGestacaoAtual(r, dum))
+        .toList(growable: false);
+
+    // A regra diz quantas doses prevê por gestação; a engine não presume
+    // esse número. Sem ele declarado, não há como saber se o previsto foi
+    // cumprido — e a engine não inventa o valor.
+    final dosesPrevistas = regra.dosesPorGestacao;
+    if (dosesPrevistas == null) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'regra sem doses por gestação declaradas',
+      );
+    }
+
+    final dosesAplicadas =
+        registrosDestaGestacao.where(_declaraDoseAplicada).length;
+
+    // Atingido o previsto pela regra, a janela deixa de importar. Vale
+    // mesmo com a gestação indeterminada — o registro é um fato informado,
+    // não uma dedução.
+    if (dosesAplicadas >= dosesPrevistas) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.registrada,
+        mensagem: mensagemDoseRegistrada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
+        podeRegistrar: false,
+        motivo: 'doses desta gestação registradas pela usuária: '
+            '$dosesAplicadas de $dosesPrevistas',
+      );
+    }
+
+    // Registro cuja situação é desconhecida não é "não aplicada": não dá
+    // para afirmar que a dose falta, nem que foi tomada.
+    if (registrosDestaGestacao.any(_temSituacaoIndeterminada)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta vacina sem situação determinada',
+      );
+    }
+
+    // Idade gestacional fora de faixa interpretável: nenhuma afirmação
+    // automática, nem de janela aberta nem de janela fechada.
+    if (!gestacaoPlausivel(diasGestacaoBruto)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.avaliacaoProfissional,
+        mensagem: mensagemGestacaoIndeterminada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.avaliacaoProfissional),
+        podeRegistrar: true,
+        motivo: 'dias de gestação fora da faixa plausível: $diasGestacaoBruto',
+      );
+    }
+
+    final semana = semanaGestacionalDe(diasGestacaoBruto);
+
+    if (semana < regra.semanaInicial) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.naoDisponivel,
+        mensagem: mensagemJanelaNaoAberta,
+        nivelAtencao: nivelDoEstado(EstadoVacina.naoDisponivel),
+        podeRegistrar: true,
+        proximaJanela: ProximaJanela(
+          semanaGestacional: regra.semanaInicial,
+          dataEstimada: dum.add(Duration(days: regra.semanaInicial * 7)),
+        ),
+        motivo: 'semana $semana anterior à semana ${regra.semanaInicial}',
+      );
+    }
+
+    return StatusVacinacao(
+      vacinaCodigo: regra.codigo,
+      estado: EstadoVacina.periodoRecomendado,
+      mensagem: mensagemPeriodoRecomendado,
+      nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+      podeRegistrar: true,
+      motivo: 'semana $semana dentro da janela a partir de '
+          '${regra.semanaInicial}',
+    );
+  }
+
+  /// Se o registro está vinculado à gestação em avaliação.
+  ///
+  /// O vínculo é o snapshot da DUM gravado no registro: sem identificador
+  /// formal de gestação, é o único disponível. DUM ausente ou diferente
+  /// significa que não dá para afirmar que o registro é desta gestação — e
+  /// a engine não afirma.
+  ///
+  /// Critério único de propósito: um registro sem vínculo não serve nem
+  /// como prova de aplicação, nem como motivo para bloquear a janela atual.
+  /// Tratá-lo de formas diferentes conforme a situação declarada faria um
+  /// registro antigo, sem DUM, travar a gestação de hoje indefinidamente.
+  static bool _pertenceAGestacaoAtual(RegistroVacinacao registro, DateTime dum) {
+    final dumDoRegistro = registro.dumNoRegistro;
+    if (dumDoRegistro == null) return false;
+
+    return _mesmoDia(dumDoRegistro, dum);
+  }
+
+  /// Se o registro declara que a dose foi aplicada — com ou sem data.
+  static bool _declaraDoseAplicada(RegistroVacinacao registro) {
+    return registro.situacaoInformada == SituacaoInformada.aplicadaComData ||
+        registro.situacaoInformada == SituacaoInformada.aplicadaDataDesconhecida;
+  }
+
+  /// Se a usuária não determinou a situação deste registro. Diferente de
+  /// "ela informou que não tomou".
+  static bool _temSituacaoIndeterminada(RegistroVacinacao registro) =>
+      registro.situacaoInformada == SituacaoInformada.situacaoDesconhecida;
+
+  static bool _mesmoDia(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+}
