@@ -139,7 +139,6 @@ void main() {
       for (final registro in [semCampo, documentoVazio]) {
         expect(registro.situacaoInformada, isNot(SituacaoInformada.aplicadaComData));
         expect(registro.situacaoInformada, isNot(SituacaoInformada.aplicadaDataDesconhecida));
-        // Também não é lido como recusa: a usuária não disse nada.
         expect(registro.situacaoInformada, isNot(SituacaoInformada.naoAplicadaInformado));
         expect(registro.situacaoInformada, SituacaoInformada.situacaoDesconhecida);
       }
@@ -191,9 +190,6 @@ void main() {
     });
 
     test('data fora de faixa é rejeitada, não normalizada para outro dia', () {
-      // DateTime.tryParse('2026-13-45') devolve 2027-02-14 em silêncio.
-      // Uma data corrompida que vira outra data plausível levaria a engine
-      // a calcular intervalos sobre um valor inventado.
       expect(DateTime.tryParse('2026-13-45'), isNotNull);
 
       final registro = RegistroVacinacao.fromMap(const {
@@ -283,8 +279,6 @@ void main() {
     });
 
     test('situação desconhecida é distinta de não aplicada', () {
-      // "Não sei" nunca deve ser confundido com "ela disse que não tomou":
-      // um é ausência de informação, o outro é uma declaração.
       expect(
         SituacaoInformada.situacaoDesconhecida,
         isNot(SituacaoInformada.naoAplicadaInformado),
@@ -377,6 +371,141 @@ void main() {
     });
   });
 
+  group('temporadaNoRegistro', () {
+    RegistroVacinacao comTemporada(String? temporada) {
+      return RegistroVacinacao(
+        vacinaCodigo: 'influenza',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        temporadaNoRegistro: temporada,
+      );
+    }
+
+    test('temporada preenchida é serializada', () {
+      expect(comTemporada('2026').toMap()['temporadaNoRegistro'], '2026');
+    });
+
+    test('temporada preenchida é desserializada', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+        'temporadaNoRegistro': '2026',
+      });
+
+      expect(registro.temporadaNoRegistro, '2026');
+    });
+
+    test('campo ausente resulta em null', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+      });
+
+      expect(registro.temporadaNoRegistro, isNull);
+    });
+
+    test('campo explicitamente null resulta em null', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+        'temporadaNoRegistro': null,
+      });
+
+      expect(registro.temporadaNoRegistro, isNull);
+    });
+
+    test('temporada nula é omitida do mapa, não gravada como null', () {
+      final mapa = comTemporada(null).toMap();
+
+      expect(mapa.containsKey('temporadaNoRegistro'), isFalse);
+      expect(mapa.values, isNot(contains(null)));
+    });
+
+    test('tipo inesperado não vira temporada', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+        'temporadaNoRegistro': 2026,
+      });
+
+      expect(registro.temporadaNoRegistro, isNull);
+    });
+
+    test('a temporada nunca é deduzida da data de aplicação', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+        'dataAplicacao': '2026-04-15',
+      });
+
+      expect(registro.dataAplicacao, DateTime(2026, 4, 15));
+      expect(registro.temporadaNoRegistro, isNull);
+      expect(registro.temporadaNoRegistro, isNot('2026'));
+    });
+
+    test('é String opaca: o conteúdo atravessa sem interpretação', () {
+      const formatos = [
+        '2026',
+        '2026/2027',
+        '2026-SUL',
+        'temporada-de-inverno',
+        ' 2026 ',
+        '',
+      ];
+
+      for (final formato in formatos) {
+        final lido = RegistroVacinacao.fromMap(comTemporada(formato).toMap());
+        expect(lido.temporadaNoRegistro, formato, reason: 'formato: "$formato"');
+      }
+    });
+
+    test('temporada vazia é distinta de temporada ausente', () {
+      final vazia = RegistroVacinacao.fromMap(comTemporada('').toMap());
+      final ausente = RegistroVacinacao.fromMap(comTemporada(null).toMap());
+
+      expect(vazia.temporadaNoRegistro, '');
+      expect(ausente.temporadaNoRegistro, isNull);
+      expect(vazia.temporadaNoRegistro, isNot(ausente.temporadaNoRegistro));
+    });
+
+    test('sobrevive à ida e volta junto dos demais campos', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'influenza',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        dataAplicacao: DateTime(2026, 4, 15),
+        dumNoRegistro: DateTime(2026, 1, 5),
+        temporadaNoRegistro: '2026',
+        criadoEm: DateTime(2026, 4, 15, 9, 30),
+        observacao: 'campanha na UBS',
+      );
+
+      final lido = RegistroVacinacao.fromMap(original.toMap());
+
+      expect(lido.temporadaNoRegistro, '2026');
+      expect(lido.vacinaCodigo, original.vacinaCodigo);
+      expect(lido.situacaoInformada, original.situacaoInformada);
+      expect(lido.origemRegistro, original.origemRegistro);
+      expect(lido.versaoCalendario, original.versaoCalendario);
+      expect(lido.dataAplicacao, original.dataAplicacao);
+      expect(lido.dumNoRegistro, original.dumNoRegistro);
+      expect(lido.criadoEm, original.criadoEm);
+      expect(lido.observacao, original.observacao);
+    });
+
+    test('temporada e gestação são snapshots independentes', () {
+      final soTemporada = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'influenza',
+        'temporadaNoRegistro': '2026',
+      });
+      final soGestacao = RegistroVacinacao.fromMap({
+        'vacinaCodigo': 'influenza',
+        'dumNoRegistro': DateTime(2026, 1, 5).toIso8601String(),
+      });
+
+      expect(soTemporada.temporadaNoRegistro, '2026');
+      expect(soTemporada.dumNoRegistro, isNull);
+
+      expect(soGestacao.dumNoRegistro, DateTime(2026, 1, 5));
+      expect(soGestacao.temporadaNoRegistro, isNull);
+    });
+  });
+
   group('RegistroVacinacao.comId', () {
     test('anexa o id sem alterar os demais campos', () {
       final original = registroCompleto();
@@ -391,6 +520,27 @@ void main() {
       expect(comId.dumNoRegistro, original.dumNoRegistro);
       expect(comId.criadoEm, original.criadoEm);
       expect(comId.observacao, original.observacao);
+    });
+
+    test('preserva a temporada do registro', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'influenza',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        temporadaNoRegistro: '2026',
+      );
+
+      expect(original.comId('doc-9').temporadaNoRegistro, '2026');
+    });
+
+    test('preserva temporada ausente como ausente', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'influenza',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+      );
+
+      expect(original.comId('doc-9').temporadaNoRegistro, isNull);
     });
 
     test('substitui um id já existente', () {

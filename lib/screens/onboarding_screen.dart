@@ -43,10 +43,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     DateTime dum;
 
     if (_modo == _ModoInformar.semanas) {
-      // DUM = hoje - (semanas * 7 dias)
       dum = DateTime.now().subtract(Duration(days: _semanasInformadas * 7));
     } else {
-      // DPP = DUM + 280 dias, então DUM = DPP - 280 dias
       dum = _dppEscolhida!.subtract(const Duration(days: 280));
     }
 
@@ -61,7 +59,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _pular() async {
-    // Usa o padrão (semana 28) já definido em gestacao_data.dart
     if (!mounted) return;
     Navigator.pushReplacement(
       context,

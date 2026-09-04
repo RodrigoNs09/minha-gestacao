@@ -4,16 +4,6 @@ import '../services/chutes_storage.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 
-/// Duração da sessão a partir de horaInicio/horaFim (strings "HH:mm").
-///
-/// Função pura, testável isoladamente — [ChuteSessao] não guarda a duração
-/// como campo, então ela é derivada aqui, no mesmo espírito de outras
-/// derivações em memória já usadas no projeto (ex: os cálculos de intervalo
-/// em HistoricoScreen).
-///
-/// Retorna `null` quando os horários não são interpretáveis, ou quando o
-/// fim aparenta ser anterior ao início — sessões de chutes não cruzam a
-/// meia-noite, então isso indica dado malformado, não duração negativa.
 Duration? duracaoDaSessao(ChuteSessao sessao) {
   final inicio = _minutosDoDia(sessao.horaInicio);
   final fim = _minutosDoDia(sessao.horaFim);
@@ -82,9 +72,6 @@ class _HistoricoChutesScreenState extends State<HistoricoChutesScreen> {
     return DateTime(ano, mes, dia);
   }
 
-  /// Sessões agrupadas por dia, mais recentes primeiro; dentro de cada dia,
-  /// horário de início mais recente primeiro. Mesmo padrão de
-  /// HistoricoScreen.gruposPorDia.
   List<MapEntry<String, List<ChuteSessao>>> get _gruposPorDia {
     final Map<String, List<ChuteSessao>> grupos = {};
     for (final s in _sessoes) {

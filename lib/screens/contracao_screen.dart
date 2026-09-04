@@ -118,9 +118,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       );
       return;
     }
-
-    // Falhou (sessão expirada ou erro do Firestore): cronômetro, intensidade,
-    // observações e o id pendente ficam intactos para permitir nova tentativa.
+    
     setState(() => _salvando = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

@@ -47,9 +47,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }).toList();
   }
 
-  /// Agrupa as contrações filtradas por dia (data yyyy-MM-dd),
-  /// já ordenadas: dias mais recentes primeiro, e dentro de cada
-  /// dia, horários mais recentes primeiro.
   List<MapEntry<String, List<Contracao>>> get gruposPorDia {
     final Map<String, List<Contracao>> grupos = {};
     for (final c in contracoesFiltradas) {
@@ -79,9 +76,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return '${d.day} ${_meses[d.month - 1]}';
   }
 
-  /// Intervalo médio só faz sentido dentro de UM dia. Para Semana/Mês,
-  /// misturar dias diferentes geraria números sem significado real,
-  /// então mostramos "—" nesses casos.
   String get intervaloMedio {
     if (_filtro != 'Hoje') return '—';
 

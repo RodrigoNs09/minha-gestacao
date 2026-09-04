@@ -105,10 +105,6 @@ void main() {
 
     test('não é uma janela por semana e não carrega semana inicial', () {
       final febreAmarela = regraPorCodigo(codigoFebreAmarela)!;
-
-      // A garantia é estrutural: RegraAvaliacaoProfissional não tem onde
-      // guardar uma semana inicial, então não há como reinterpretá-la como
-      // janela automática sem trocar o tipo da regra.
       expect(febreAmarela, isNot(isA<RegraJanelaSemana>()));
     });
 
@@ -124,8 +120,6 @@ void main() {
     test('não carrega nenhum parâmetro que abra uma janela', () {
       final febreAmarela = regraPorCodigo(codigoFebreAmarela)!;
 
-      // Nem semana (o tipo não tem o campo), nem contagem por gestação que
-      // pudesse ser lida como uma dose devida nesta gestação.
       expect(febreAmarela, isNot(isA<RegraJanelaSemana>()));
       expect(febreAmarela, isNot(isA<RegraDependeHistorico>()));
       expect(febreAmarela, isNot(isA<RegraDependeTemporada>()));
@@ -237,8 +231,6 @@ void main() {
       final influenza = regraPorCodigo(codigoInfluenza) as RegraDependeTemporada;
 
       expect(influenza.dosesPorTemporada, 1);
-      // A temporada vigente não é parâmetro do calendário: determiná-la é
-      // responsabilidade de um serviço explícito na engine.
       expect(influenza.dosesPorGestacao, isNull);
     });
 
@@ -304,8 +296,6 @@ void main() {
     });
 
     test('todas as sete regras têm parâmetros completos nesta versão', () {
-      // Ausência de parâmetro seria sinalizada, não silenciosa: a engine
-      // precisa distinguir "não há exigência" de "o dado não foi definido".
       final pendentes = calendarioPni2026
           .where((r) => !r.parametrosCompletos)
           .map((r) => r.codigo)
@@ -434,9 +424,6 @@ void main() {
     test('Intervalo compara por valor e unidade, sem converter entre elas', () {
       expect(const Intervalo.dias(60), const Intervalo.dias(60));
       expect(const Intervalo.meses(6), const Intervalo.meses(6));
-
-      // 30 dias e 1 mês não são declarados equivalentes: converter é
-      // decisão da engine, não do calendário.
       expect(const Intervalo.dias(30), isNot(const Intervalo.meses(1)));
       expect(const Intervalo.dias(60), isNot(const Intervalo.dias(30)));
     });
@@ -456,8 +443,6 @@ void main() {
       final dt = regraPorCodigo(codigoDt) as RegraDependeHistorico;
       final dtpa = regraPorCodigo(codigoDtpa)!;
 
-      // É este dado que permitirá à engine contar uma dose de dTpa no
-      // intervalo do dT, sem precisar saber composição de vacina sozinha.
       expect(dtpa.composicao.containsAll(dt.componentesDoIntervalo), isTrue);
     });
 

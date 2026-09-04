@@ -31,8 +31,6 @@ class AppTheme {
   );
 }
 
-/// Helper de cores adaptáveis — use em qualquer tela:
-/// AppColors.surface(context), AppColors.textPrimary(context), etc.
 class AppColors {
   static bool isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;

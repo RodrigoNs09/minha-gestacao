@@ -289,7 +289,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
                           else
                             SizedBox(
                               height: 100,
-                              // CORREÇÃO: Row direto com Expanded e SizedBox intercalados
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
@@ -323,7 +322,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Insight IA
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

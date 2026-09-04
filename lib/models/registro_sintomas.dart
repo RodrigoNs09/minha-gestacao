@@ -1,7 +1,7 @@
 class RegistroSintomas {
-  final String data; // yyyy-MM-dd
-  final int? humor; // índice 0-4 (Ótima, Ok, Triste, Exausta, Enjoada)
-  final List<String> sintomas; // ids dos sintomas marcados
+  final String data;
+  final int? humor;
+  final List<String> sintomas;
   final double? peso;
 
   RegistroSintomas({

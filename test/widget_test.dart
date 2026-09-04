@@ -4,27 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/main.dart';
 import 'package:suacontracao_ai/theme/app_theme.dart';
 
-/// Smoke test do app.
-///
-/// Substitui o teste gerado pelo template do Flutter, que referenciava
-/// `MyApp` e um contador que nunca existiram neste projeto. O widget raiz
-/// real é [MinhaGestacaoApp] (`lib/main.dart`).
-///
-/// Por que a árvore completa não é montada aqui: o `build()` de
-/// [MinhaGestacaoApp] resolve `FirebaseAuth.instance` para alimentar o
-/// `StreamBuilder` do `home:`. Em teste de widget o `Firebase.initializeApp()`
-/// nunca foi executado, então esse acesso lança
-/// `[core/no-app] No Firebase App '[DEFAULT]' has been created`.
-///
-/// Montar a raiz exige mockar o Firebase Core (via `setupFirebaseCoreMocks`
-/// do `firebase_core_platform_interface`), o que depende de uma dev dependency
-/// nova no `pubspec.yaml`. Enquanto isso não é feito, este arquivo cobre o que
-/// é alcançável sem runtime do Firebase e mantém uma referência de compilação
-/// a [MinhaGestacaoApp], para que uma renomeação do widget raiz volte a
-/// quebrar o build do teste — que é o que o teste antigo deixou de fazer.
 void main() {
-  // themeNotifier é um ValueNotifier global e mutável. Sem restaurar o valor,
-  // um teste contamina os seguintes.
   late ThemeMode modoOriginal;
 
   setUp(() {
@@ -47,7 +27,7 @@ void main() {
         await tester.pumpWidget(const MinhaGestacaoApp());
         expect(find.byType(MaterialApp), findsOneWidget);
       },
-      skip: true, // Requer mock do Firebase Core — ver comentário no topo.
+      skip: true, 
     );
   });
 
@@ -100,15 +80,8 @@ void main() {
   });
 
   group('Tema — AppColors respondem ao brightness do contexto', () {
-    // Sonda usada para recuperar um BuildContext logo após cada pump.
-    // Nunca guardamos o contexto entre pumps: após uma reconstrução ele
-    // fica obsoleto, e ler dele devolve o tema anterior.
     const sonda = Key('sonda-tema');
 
-    /// Espelha a montagem real de `MinhaGestacaoApp`: os dois temas
-    /// registrados e a escolha feita por `themeMode`. A versão anterior
-    /// deste helper passava apenas `theme:` e deixava `themeMode` cair no
-    /// default `ThemeMode.system`, que não é como o app se monta.
     Widget appComModo(ThemeMode modo) {
       return MaterialApp(
         theme: AppTheme.light,
@@ -136,11 +109,7 @@ void main() {
       final textoClaro = AppColors.textPrimary(ctxClaro);
 
       await tester.pumpWidget(appComModo(ThemeMode.dark));
-      // MaterialApp troca o tema através de AnimatedTheme, ao longo de
-      // kThemeAnimationDuration. ThemeData.lerp resolve brightness como
-      // `t < 0.5 ? a : b`, então no primeiro frame após a troca o tema ainda
-      // é o anterior. Sem deixar a animação concluir, a versão anterior deste
-      // teste lia o surface claro nas duas vezes e comparava branco com branco.
+      
       await tester.pumpAndSettle();
 
       final ctxEscuro = tester.element(find.byKey(sonda));

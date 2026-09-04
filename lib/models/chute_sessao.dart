@@ -1,5 +1,5 @@
 class ChuteSessao {
-  final String data; // formato: yyyy-MM-dd
+  final String data; 
   final String horaInicio;
   final String horaFim;
   final int totalChutes;

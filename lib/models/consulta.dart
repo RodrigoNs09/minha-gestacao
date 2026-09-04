@@ -1,9 +1,9 @@
 class Consulta {
-  final String id; // timestamp único
+  final String id; 
   final String titulo;
   final String profissional;
-  final String data; // yyyy-MM-dd
-  final String hora; // HH:mm
+  final String data; 
+  final String hora; 
   final bool realizada;
 
   Consulta({

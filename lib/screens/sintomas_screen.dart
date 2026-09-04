@@ -68,10 +68,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
     }
   }
 
-  /// Reconstrói o registro de hoje a partir do estado atual da tela e
-  /// persiste. Se a gravação falhar, desfaz a mutação de [listaSintomas]
-  /// (restaura o registro anterior de hoje) e relança — quem chamou decide
-  /// como reverter o próprio estado (humor/sintomas) e informar o erro.
   Future<void> _salvarRegistroDeHoje() async {
     final hoje = _hoje();
     final registroAnterior = listaSintomas.where((r) => r.data == hoje).toList();

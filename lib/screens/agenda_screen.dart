@@ -66,13 +66,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
     setState(() {});
   }
 
-  /// Tenta persistir a lista sem [c] antes de o Dismissible confirmar a
-  /// remoção. Não muta listaConsultas aqui — isso só acontece em
-  /// onDismissed, depois que a animação de saída já tiver terminado. Nunca
-  /// se readiciona um item depois que o Dismissible tiver confirmado o
-  /// dismiss: isso recriaria a mesma Key numa árvore que o framework já
-  /// tratou como removida. Em caso de falha, é o próprio Dismissible quem
-  /// reverte a posição do item, ao receber `false` deste callback.
   Future<bool> _excluirConsulta(Consulta c) async {
     final semItem = List<Consulta>.from(listaConsultas)..removeWhere((x) => x.id == c.id);
 

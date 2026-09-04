@@ -96,8 +96,6 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
       );
 
       if (_chutesAtuais >= _metaChutes) {
-        // Reaproveita o mesmo id entre tentativas: um retry após falha
-        // sobrescreve a mesma sessão em vez de criar outra.
         _idSessaoPendente ??= ChutesStorage.novoId();
 
         final fim = DateTime.now();
@@ -114,9 +112,6 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
         await ChutesStorage.limparProgressoAtual();
       }
     } catch (erro) {
-      // Desfaz a mutação otimista: os chutes anteriores (já persistidos)
-      // são preservados, só este toque volta atrás. _idSessaoPendente NÃO
-      // é limpo, para que o próximo toque reaproveite o mesmo id.
       if (novaSessao != null) {
         listaChutes.remove(novaSessao);
       }

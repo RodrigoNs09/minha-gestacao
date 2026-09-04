@@ -1,10 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Traduz erros do Firestore em mensagens amigáveis em PT-BR.
-///
-/// Cobre apenas os códigos mais comuns em uso móvel (conectividade,
-/// timeout, permissão, cancelamento); qualquer outro código cai no
-/// fallback genérico de [falhaGenerica].
 class FirestoreErro {
   static const String semConexao =
       'Sem conexão com o servidor. Verifique sua internet e tente novamente.';

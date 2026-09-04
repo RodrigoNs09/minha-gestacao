@@ -1,10 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/models/contracao.dart';
 
-/// Etapa 1 do plano de migração.
-///
-/// Cobre apenas funções puras: nenhum teste aqui toca Firebase, rede ou
-/// estado global. Nenhuma escrita, nenhuma migração.
 void main() {
   group('Contracao.duracaoSegundosDe — casos canônicos', () {
     test('Duração: 01:30 → 90s', () {
@@ -16,8 +12,6 @@ void main() {
     });
 
     test('Duração: 105:30 → 6330s (regressão da regex de 2 dígitos)', () {
-      // A regex antiga exigia exatamente 2 dígitos nos minutos e falhava
-      // aqui, descartando silenciosamente a duração.
       expect(Contracao.duracaoSegundosDe('Duração: 105:30'), 6330);
     });
 
@@ -105,7 +99,6 @@ void main() {
     });
 
     test('sequência de dígitos longa não é truncada', () {
-      // Sem o (?!\d) isto casaria "01:53" e devolveria 113s.
       expect(Contracao.duracaoSegundosDe('Duração: 01:530'), isNull);
     });
 
@@ -254,9 +247,6 @@ void main() {
     });
 
     test('campo data ausente ainda cai no fallback de hoje (comportamento atual)', () {
-      // Documenta o comportamento herdado. A correção deste ponto (classe E3
-      // do plano) fica para a etapa de migração — aqui apenas fixamos que
-      // ele não mudou.
       final c = Contracao.fromMap(const {'observacoes': ''});
       final agora = DateTime.now();
       final hoje =
@@ -291,8 +281,6 @@ void main() {
     });
 
     test('preserva origemDuracao derivada — não a promove a campo', () {
-      // Se comId passasse duracaoSegundos pelo construtor público, a origem
-      // viraria OrigemDuracao.campo e a classificação seria corrompida.
       final derivada = base();
       expect(derivada.origemDuracao, OrigemDuracao.observacoes);
       expect(derivada.comId('doc-abc').origemDuracao,
@@ -404,11 +392,6 @@ void main() {
     });
 
     test('registro legado carregado seria promovido a v2 ao serializar', () {
-      // Documenta a consequência do dual-write: a duração derivada em memória
-      // vira campo tipado se o registro for serializado. Nenhum caminho de
-      // escrita faz isso hoje — ContracoesStorage.adicionar só grava
-      // contrações recém-criadas. Este teste existe para que a promoção seja
-      // uma decisão consciente quando um método de atualização for criado.
       final legado = Contracao.fromMap(const {
         'data': '2026-01-15',
         'inicio': '08:00',

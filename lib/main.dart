@@ -56,7 +56,7 @@ class MinhaGestacaoApp extends StatelessWidget {
               if (!snapshot.hasData) {
                 return const LoginScreen();
               }
-              // Usuário logado — só agora é seguro checar o onboarding
+              
               return const _RestaurarDumGate();
             },
           ),
@@ -66,13 +66,6 @@ class MinhaGestacaoApp extends StatelessWidget {
   }
 }
 
-/// Restaura a DUM salva no Firestore antes de decidir entre Home e
-/// Onboarding. Guarda a Future em estado local (em vez de recriá-la a cada
-/// build) para que o botão de retry possa refazer a tentativa via setState —
-/// um FutureBuilder puro, sem estado, não permite isso.
-///
-/// Em caso de erro, nunca interpreta a falha como "DUM não configurada":
-/// mostra uma tela de erro dedicada em vez de decidir a rota às cegas.
 class _RestaurarDumGate extends StatefulWidget {
   const _RestaurarDumGate();
 
