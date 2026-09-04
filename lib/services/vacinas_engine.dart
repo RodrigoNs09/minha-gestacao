@@ -170,6 +170,46 @@ const String mensagemVerificarHistorico =
     'Não é possível determinar esta situação com as informações '
     'disponíveis. Confirme seu histórico com a equipe de saúde.';
 
+const String mensagemAguardarIntervalo =
+    'Ainda não foi cumprido o intervalo mínimo desde a última dose '
+    'registrada. Confirme as orientações com a equipe de saúde.';
+
+// ── Aritmética de calendário ────────────────────────────────────────────
+
+/// Soma [meses] a [data] respeitando o calendário, não uma quantidade fixa
+/// de dias.
+///
+/// Somar `Duration(days: 180)` daria resultados diferentes conforme os
+/// meses envolvidos, e não é o que o calendário quer dizer com "6 meses".
+///
+/// ## Convenção de cálculo deste aplicativo — não é regra do PNI
+///
+/// Quando o dia de origem não existe no mês de destino (31/08 + 6 meses
+/// cairia em 31/02), a data resultante é o **último dia** do mês de
+/// destino: 28/02, ou 29/02 em ano bissexto.
+///
+/// Esta é uma decisão de implementação, adotada por ser determinística e
+/// por antecipar a data de liberação em vez de adiá-la. **Não** foi
+/// encontrada orientação do Ministério da Saúde sobre esse caso — a
+/// Instrução Normativa do Calendário Nacional de Vacinação define os
+/// intervalos, não a aritmética de datas para dias inexistentes. Portanto
+/// esta convenção não deve ser apresentada à usuária, nem em código nem em
+/// interface, como se fosse orientação oficial.
+///
+/// Se uma orientação oficial vier a existir e divergir daqui, basta alterar
+/// esta função: nenhuma regra do calendário depende da convenção escolhida.
+DateTime adicionarMeses(DateTime data, int meses) {
+  final totalMeses = data.month - 1 + meses;
+  final ano = data.year + (totalMeses ~/ 12);
+  final mes = (totalMeses % 12) + 1;
+
+  // Dia 0 do mês seguinte é o último dia do mês corrente.
+  final ultimoDiaDoMes = DateTime(ano, mes + 1, 0).day;
+  final dia = data.day <= ultimoDiaDoMes ? data.day : ultimoDiaDoMes;
+
+  return DateTime(ano, mes, dia);
+}
+
 // ── Faixa gestacional plausível ─────────────────────────────────────────
 
 /// Menor valor de dias de gestação que a engine considera interpretável.
@@ -262,10 +302,17 @@ class VacinasEngine {
           historico: historico,
         );
 
-      // Etapa 3C. Até lá, a engine não afirma nada sobre estas regras.
+      case RegraDependeIntervaloUltimaDose():
+        return _avaliarIntervaloUltimaDose(
+          regra: regra,
+          dum: dum,
+          dataAtual: dataAtual,
+          historico: historico,
+        );
+
+      // Etapas seguintes. Até lá, a engine não afirma nada sobre estas.
       case RegraDependeHistorico():
       case RegraDependeTemporada():
-      case RegraDependeIntervaloUltimaDose():
         return StatusVacinacao(
           vacinaCodigo: regra.codigo,
           estado: EstadoVacina.verificarHistorico,
@@ -276,6 +323,140 @@ class VacinasEngine {
         );
     }
   }
+
+  /// Avalia uma regra de dose por gestação com intervalo mínimo desde a
+  /// última dose — o caso do COVID-19 no PNI-2026.
+  ///
+  /// A gestação atual e o histórico anterior têm papéis distintos: doses
+  /// vinculadas a esta gestação contam para o limite de doses por gestação;
+  /// doses de qualquer época contam para o intervalo mínimo. Uma dose
+  /// anterior nunca é confundida com dose desta gestação.
+  static StatusVacinacao _avaliarIntervaloUltimaDose({
+    required RegraDependeIntervaloUltimaDose regra,
+    required DateTime dum,
+    required DateTime dataAtual,
+    required List<RegistroVacinacao> historico,
+  }) {
+    final registros = historico
+        .where((r) => r.vacinaCodigo == regra.codigo)
+        .toList(growable: false);
+
+    final destaGestacao = registros
+        .where((r) => _pertenceAGestacaoAtual(r, dum))
+        .toList(growable: false);
+
+    final dosesPrevistas = regra.dosesPorGestacao;
+    if (dosesPrevistas == null) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'regra sem doses por gestação declaradas',
+      );
+    }
+
+    final aplicadasNestaGestacao = destaGestacao.where(_declaraDoseAplicada).length;
+    if (aplicadasNestaGestacao >= dosesPrevistas) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.registrada,
+        mensagem: mensagemDoseRegistrada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
+        podeRegistrar: false,
+        motivo: 'doses desta gestação registradas pela usuária: '
+            '$aplicadasNestaGestacao de $dosesPrevistas',
+      );
+    }
+
+    if (destaGestacao.any(_temSituacaoIndeterminada)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta vacina sem situação determinada',
+      );
+    }
+
+    // Para o intervalo, o que importa é a última dose declarada — de
+    // qualquer gestação, inclusive sem vínculo com alguma.
+    final dosesAplicadas =
+        registros.where(_declaraDoseAplicada).toList(growable: false);
+
+    if (dosesAplicadas.isEmpty) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.periodoRecomendado,
+        mensagem: mensagemPeriodoRecomendado,
+        nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+        podeRegistrar: true,
+        motivo: 'sem dose anterior declarada; nenhum intervalo a cumprir',
+      );
+    }
+
+    // Uma dose sem data pode ter sido ontem: com ela no histórico, não há
+    // como afirmar que o intervalo foi cumprido, mesmo que exista outra
+    // dose antiga com data conhecida.
+    if (dosesAplicadas.any((r) => r.dataAplicacao == null)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há dose declarada sem data: intervalo não verificável',
+      );
+    }
+
+    final ultimaDose = dosesAplicadas
+        .map((r) => r.dataAplicacao!)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+
+    final liberacao = _somarIntervalo(ultimaDose, regra.intervaloMinimoDesdeUltimaDose);
+
+    if (_naoPosteriorA(liberacao, dataAtual)) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.periodoRecomendado,
+        mensagem: mensagemPeriodoRecomendado,
+        nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+        podeRegistrar: true,
+        motivo: 'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} cumprido '
+            'desde ${_soData(ultimaDose)}',
+      );
+    }
+
+    return StatusVacinacao(
+      vacinaCodigo: regra.codigo,
+      estado: EstadoVacina.aguardarIntervalo,
+      mensagem: mensagemAguardarIntervalo,
+      nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
+      podeRegistrar: true,
+      motivo: 'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} desde '
+          '${_soData(ultimaDose)} completa em ${_soData(liberacao)}',
+    );
+  }
+
+  /// Soma um [Intervalo] do calendário a uma data, respeitando a unidade
+  /// declarada. Meses nunca viram uma quantidade fixa de dias.
+  static DateTime _somarIntervalo(DateTime data, Intervalo intervalo) {
+    switch (intervalo.unidade) {
+      case UnidadeIntervalo.dias:
+        return data.add(Duration(days: intervalo.valor));
+      case UnidadeIntervalo.meses:
+        return adicionarMeses(data, intervalo.valor);
+    }
+  }
+
+  /// Se [a] não é posterior a [b], comparando apenas o dia — hora do
+  /// registro não deve mudar a decisão.
+  static bool _naoPosteriorA(DateTime a, DateTime b) =>
+      !_soData(a).isAfter(_soData(b));
+
+  static DateTime _soData(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static StatusVacinacao _avaliarJanelaSemana({
     required RegraJanelaSemana regra,

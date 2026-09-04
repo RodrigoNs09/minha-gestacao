@@ -514,11 +514,341 @@ void main() {
     });
   });
 
-  group('Condicionais ainda não avaliadas (Etapa 3C)', () {
+  group('adicionarMeses — aritmética de calendário', () {
+    test('mês com o mesmo dia', () {
+      expect(adicionarMeses(DateTime(2026, 1, 15), 6), DateTime(2026, 7, 15));
+    });
+
+    test('vira o ano corretamente', () {
+      expect(adicionarMeses(DateTime(2026, 8, 10), 6), DateTime(2027, 2, 10));
+      expect(adicionarMeses(DateTime(2026, 12, 31), 1), DateTime(2027, 1, 31));
+    });
+
+    test('31/08 + 6 meses cai no último dia de fevereiro, não em março', () {
+      expect(adicionarMeses(DateTime(2026, 8, 31), 6), DateTime(2027, 2, 28));
+      expect(adicionarMeses(DateTime(2026, 8, 31), 6), isNot(DateTime(2027, 3, 3)));
+    });
+
+    test('respeita ano bissexto', () {
+      // 2028 é bissexto: 29 dias em fevereiro.
+      expect(adicionarMeses(DateTime(2027, 8, 31), 6), DateTime(2028, 2, 29));
+      expect(adicionarMeses(DateTime(2028, 2, 29), 12), DateTime(2029, 2, 28));
+    });
+
+    test('31/03 + 1 mês cai em 30/04', () {
+      expect(adicionarMeses(DateTime(2026, 3, 31), 1), DateTime(2026, 4, 30));
+    });
+
+    test('não equivale a somar 180 dias', () {
+      final origem = DateTime(2026, 1, 1);
+      expect(
+        adicionarMeses(origem, 6),
+        isNot(origem.add(const Duration(days: 180))),
+      );
+    });
+  });
+
+  group('COVID-19 — 1 dose por gestação e intervalo de 6 meses', () {
+    StatusVacinacao covidEm({
+      required int diasGestacaoBruto,
+      List<RegistroVacinacao> historico = const [],
+      DateTime? dataAtual,
+    }) {
+      return statusDe(
+        avaliarEm(
+          diasGestacaoBruto: diasGestacaoBruto,
+          historico: historico,
+          dataAtual: dataAtual,
+        ),
+        codigoCovid19,
+      );
+    }
+
+    RegistroVacinacao doseCovid({
+      required DateTime? dataAplicacao,
+      DateTime? dumNoRegistro,
+      SituacaoInformada situacao = SituacaoInformada.aplicadaComData,
+    }) {
+      return RegistroVacinacao(
+        vacinaCodigo: codigoCovid19,
+        situacaoInformada: situacao,
+        versaoCalendario: versaoCalendarioPni2026,
+        dataAplicacao: dataAplicacao,
+        dumNoRegistro: dumNoRegistro,
+      );
+    }
+
+    test('1. sem histórico e sem dose nesta gestação: período recomendado', () {
+      final covid = covidEm(diasGestacaoBruto: 200);
+
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+      expect(covid.mensagem, mensagemPeriodoRecomendado);
+    });
+
+    test('2. última dose exatamente 6 meses antes: liberado', () {
+      final hoje = DateTime(2026, 7, 15);
+
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: hoje,
+        historico: [doseCovid(dataAplicacao: DateTime(2026, 1, 15))],
+      );
+
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('3. um dia antes de completar 6 meses: aguardar intervalo', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 14),
+        historico: [doseCovid(dataAplicacao: DateTime(2026, 1, 15))],
+      );
+
+      expect(covid.estado, EstadoVacina.aguardarIntervalo);
+      expect(covid.mensagem, mensagemAguardarIntervalo);
+      expect(covid.nivelAtencao, NivelAtencao.informativo);
+    });
+
+    test('4. bem depois de 6 meses: liberado', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2027, 3, 1),
+        historico: [doseCovid(dataAplicacao: DateTime(2026, 1, 15))],
+      );
+
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('5. dose anterior à gestação não conta como desta, mas conta no intervalo', () {
+      // Dose de outra gestação, recente demais: não é dose desta gestação,
+      // mas impede afirmar que o intervalo foi cumprido.
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 1),
+        historico: [
+          doseCovid(
+            dataAplicacao: DateTime(2026, 5, 1),
+            dumNoRegistro: DateTime(2024, 3, 10),
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.aguardarIntervalo);
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('6. dose registrada nesta gestação: REGISTRADA', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(dataAplicacao: DateTime(2026, 6, 1), dumNoRegistro: dum),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.registrada);
+      expect(covid.mensagem, mensagemDoseRegistrada);
+      expect(covid.podeRegistrar, isFalse);
+    });
+
+    test('7. dose de outra gestação não conta como registrada nesta', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2027, 1, 1),
+        historico: [
+          doseCovid(
+            dataAplicacao: DateTime(2024, 4, 1),
+            dumNoRegistro: DateTime(2024, 3, 10),
+          ),
+        ],
+      );
+
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+      // Intervalo antigo já cumprido, então a janela está aberta.
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('8. situação desconhecida não é tratada como dose aplicada', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: DateTime(2026, 6, 1),
+            dumNoRegistro: dum,
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+      expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('dose aplicada sem data não permite afirmar o intervalo', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('dose sem data prevalece mesmo havendo outra antiga com data', () {
+      // A dose sem data pode ter sido ontem; não dá para concluir nada.
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2027, 1, 1),
+        historico: [
+          doseCovid(dataAplicacao: DateTime(2020, 1, 1)),
+          doseCovid(
+            dataAplicacao: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+    });
+
+    test('quem informou que não recebeu não tem intervalo a cumprir', () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: null,
+            situacao: SituacaoInformada.naoAplicadaInformado,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('9. virada de ano é tratada corretamente', () {
+      final ultima = DateTime(2026, 10, 20);
+
+      // 20/10/2026 + 6 meses = 20/04/2027.
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2027, 4, 19),
+          historico: [doseCovid(dataAplicacao: ultima)],
+        ).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2027, 4, 20),
+          historico: [doseCovid(dataAplicacao: ultima)],
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('10. ano bissexto: 31/08/2027 + 6 meses libera em 29/02/2028', () {
+      final ultima = DateTime(2027, 8, 31);
+
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2028, 2, 28),
+          historico: [doseCovid(dataAplicacao: ultima)],
+        ).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2028, 2, 29),
+          historico: [doseCovid(dataAplicacao: ultima)],
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('11. dataAtual diferente muda o resultado ao cruzar o corte', () {
+      final historico = [doseCovid(dataAplicacao: DateTime(2026, 1, 15))];
+
+      final antes = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 14),
+        historico: historico,
+      );
+      final depois = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 15),
+        historico: historico,
+      );
+
+      // Mesmas entradas exceto a data injetada: o resultado muda.
+      expect(antes.estado, EstadoVacina.aguardarIntervalo);
+      expect(depois.estado, EstadoVacina.periodoRecomendado);
+      expect(antes.estado, isNot(depois.estado));
+    });
+
+    test('12. a decisão vem da dataAtual injetada, não do relógio', () {
+      final historico = [doseCovid(dataAplicacao: DateTime(2026, 1, 15))];
+
+      // Uma data no passado distante e outra no futuro distante em relação
+      // a qualquer "agora" real: se a engine consultasse o relógio, uma
+      // destas daria o mesmo resultado da outra.
+      final passado = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 2, 1),
+        historico: historico,
+      );
+      final futuro = covidEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2099, 1, 1),
+        historico: historico,
+      );
+
+      expect(passado.estado, EstadoVacina.aguardarIntervalo);
+      expect(futuro.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('a hora do dia não altera a decisão no dia do corte', () {
+      final historico = [doseCovid(dataAplicacao: DateTime(2026, 1, 15, 23, 59))];
+
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2026, 7, 15, 0, 1),
+          historico: historico,
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('o intervalo usado vem do calendário, não de um número fixo', () {
+      final regra = regraPorCodigo(codigoCovid19) as RegraDependeIntervaloUltimaDose;
+
+      expect(regra.intervaloMinimoDesdeUltimaDose, const Intervalo.meses(6));
+      expect(
+        covidEm(
+          diasGestacaoBruto: 200,
+          dataAtual: DateTime(2026, 7, 14),
+          historico: [doseCovid(dataAplicacao: DateTime(2026, 1, 15))],
+        ).motivo,
+        contains('6 meses'),
+      );
+    });
+  });
+
+  group('Condicionais ainda não avaliadas (Etapas seguintes)', () {
     test('não afirmam período recomendado', () {
       final resultado = avaliarEm(diasGestacaoBruto: 200);
 
-      for (final codigo in [codigoHepatiteB, codigoDt, codigoInfluenza, codigoCovid19]) {
+      for (final codigo in [codigoHepatiteB, codigoDt, codigoInfluenza]) {
         final status = statusDe(resultado, codigo);
         expect(status.estado, EstadoVacina.verificarHistorico, reason: codigo);
         expect(status.estado, isNot(EstadoVacina.periodoRecomendado), reason: codigo);
@@ -555,9 +885,13 @@ void main() {
       }
     });
 
-    test('a data atual injetada não altera a janela: quem manda é a gestação', () {
-      // Duas datas correntes diferentes, mesmos dias de gestação: mesmo
-      // resultado. A engine não consulta o relógio para decidir a janela.
+    test('janelas por semana (dTpa/VSR) não mudam com a dataAtual', () {
+      // Duas datas correntes muito distantes entre si, mesmos dias de
+      // gestação: as janelas por semana produzem o mesmo estado. Quem manda
+      // nelas é a idade gestacional, não o calendário civil.
+      //
+      // Vale só para RegraJanelaSemana: o COVID-19 depende legitimamente da
+      // dataAtual, e por isso é verificado à parte.
       final comUmaData = avaliarEm(
         diasGestacaoBruto: 140,
         dataAtual: DateTime(2026, 5, 25),
@@ -567,10 +901,87 @@ void main() {
         dataAtual: DateTime(2030, 12, 31),
       );
 
-      expect(
-        comUmaData.map((s) => s.estado).toList(),
-        comOutraData.map((s) => s.estado).toList(),
+      for (final codigo in [codigoDtpa, codigoVsr]) {
+        expect(
+          statusDe(comUmaData, codigo).estado,
+          statusDe(comOutraData, codigo).estado,
+          reason: codigo,
+        );
+      }
+    });
+
+    test('dTpa e VSR dependem da gestação, não da dataAtual', () {
+      // Mesma dataAtual, gestações diferentes: o estado muda.
+      final mesmaData = DateTime(2026, 8, 1);
+
+      final antesDaJanela = avaliarEm(
+        diasGestacaoBruto: 139,
+        dataAtual: mesmaData,
       );
+      final dentroDaJanela = avaliarEm(
+        diasGestacaoBruto: 140,
+        dataAtual: mesmaData,
+      );
+
+      expect(statusDe(antesDaJanela, codigoDtpa).estado, EstadoVacina.naoDisponivel);
+      expect(statusDe(dentroDaJanela, codigoDtpa).estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('COVID-19 depende da dataAtual, não da idade gestacional', () {
+      // O contraste com o teste acima: aqui a gestação é a mesma e só a
+      // data corrente muda — e é ela que decide.
+      final historico = [
+        RegistroVacinacao(
+          vacinaCodigo: codigoCovid19,
+          situacaoInformada: SituacaoInformada.aplicadaComData,
+          versaoCalendario: versaoCalendarioPni2026,
+          dataAplicacao: DateTime(2026, 1, 15),
+        ),
+      ];
+
+      final antesDoCorte = avaliarEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 14),
+        historico: historico,
+      );
+      final depoisDoCorte = avaliarEm(
+        diasGestacaoBruto: 200,
+        dataAtual: DateTime(2026, 7, 15),
+        historico: historico,
+      );
+
+      expect(statusDe(antesDoCorte, codigoCovid19).estado, EstadoVacina.aguardarIntervalo);
+      expect(statusDe(depoisDoCorte, codigoCovid19).estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('COVID-19 não muda com a gestação quando a dataAtual é a mesma', () {
+      // A recíproca: variar a idade gestacional não move o intervalo.
+      final historico = [
+        RegistroVacinacao(
+          vacinaCodigo: codigoCovid19,
+          situacaoInformada: SituacaoInformada.aplicadaComData,
+          versaoCalendario: versaoCalendarioPni2026,
+          dataAplicacao: DateTime(2026, 1, 15),
+        ),
+      ];
+      final mesmaData = DateTime(2026, 7, 14);
+
+      final gestacaoInicial = avaliarEm(
+        diasGestacaoBruto: 50,
+        dataAtual: mesmaData,
+        historico: historico,
+      );
+      final gestacaoAvancada = avaliarEm(
+        diasGestacaoBruto: 250,
+        dataAtual: mesmaData,
+        historico: historico,
+      );
+
+      expect(
+        statusDe(gestacaoInicial, codigoCovid19).estado,
+        statusDe(gestacaoAvancada, codigoCovid19).estado,
+      );
+      expect(statusDe(gestacaoInicial, codigoCovid19).estado, EstadoVacina.aguardarIntervalo);
     });
 
     test('a ordem de saída acompanha a ordem do calendário', () {
