@@ -4,26 +4,19 @@ import '../data/vacinas_calendario_2026.dart';
 import '../models/registro_vacinacao.dart';
 
 enum EstadoVacina {
-  /// A janela ainda não abriu.
+
   naoDisponivel('NAO_DISPONIVEL'),
 
-  /// A janela está aberta. Nunca significa "tome agora": a mensagem
-  /// associada orienta confirmar com a equipe de saúde.
   periodoRecomendado('PERIODO_RECOMENDADO'),
 
-  /// Falta informação para determinar a situação com segurança.
   verificarHistorico('VERIFICAR_HISTORICO'),
 
-  /// Há um intervalo mínimo a cumprir desde uma dose anterior.
   aguardarIntervalo('AGUARDAR_INTERVALO'),
 
-  /// A usuária registrou a dose. Registro dela, não validação do sistema.
   registrada('REGISTRADA'),
 
-  /// A indicação depende de avaliação de um profissional.
   avaliacaoProfissional('AVALIACAO_PROFISSIONAL'),
 
-  /// A recomendação não se aplica.
   naoIndicada('NAO_INDICADA');
 
   const EstadoVacina(this.codigo);
@@ -31,13 +24,11 @@ enum EstadoVacina {
 }
 
 enum NivelAtencao {
-  /// Nada a fazer agora.
+
   nenhum('NENHUM'),
 
-  /// Vale saber, sem ação imediata.
   informativo('INFORMATIVO'),
 
-  /// Vale levar à equipe de saúde.
   atencao('ATENCAO');
 
   const NivelAtencao(this.codigo);
@@ -45,7 +36,6 @@ enum NivelAtencao {
   final String codigo;
 }
 
-/// Mapeamento explícito de estado para nível de atenção.
 NivelAtencao nivelDoEstado(EstadoVacina estado) {
   switch (estado) {
     case EstadoVacina.naoDisponivel:
@@ -62,11 +52,8 @@ NivelAtencao nivelDoEstado(EstadoVacina estado) {
 }
 
 final class ProximaJanela {
-  /// Semana gestacional em que a janela abre.
   final int semanaGestacional;
 
-  /// Data estimada de abertura, derivada da DUM. Estimativa aritmética,
-  /// não uma data marcada por ninguém.
   final DateTime dataEstimada;
 
   const ProximaJanela({
@@ -86,8 +73,6 @@ final class ProximaJanela {
   @override
   String toString() => 'semana $semanaGestacional ($dataEstimada)';
 }
-
-/// Resultado da avaliação de uma vacina. Derivado, nunca persistido.
 final class StatusVacinacao {
   final String vacinaCodigo;
   final EstadoVacina estado;
@@ -255,7 +240,6 @@ class VacinasEngine {
         motivo: motivo,
       );
 
-  /// Motivo da inconsistência na numeração declarada, ou `null` se coerente.
   static String? _inconsistenciaDeNumeracao(
     List<RegistroVacinacao> aplicadas,
     int dosesDoEsquema,
@@ -274,9 +258,6 @@ class VacinasEngine {
       return 'há posições de dose repetidas no esquema';
     }
 
-    // Consistência dos dados, não regra do calendário: uma dose de posição
-    // maior tem de ser posterior às anteriores, e datas iguais também são
-    // inconsistentes. A posição segue vindo só de numeroDaDose.
     final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
     final ordenados = numeros.toList()..sort();
     for (var a = 0; a < ordenados.length - 1; a++) {
@@ -294,13 +275,6 @@ class VacinasEngine {
     return null;
   }
 
-  /// Se uma dose de outra vacina com os componentes pode abrir o esquema
-  /// básico sozinha, sem nenhuma dose da própria vacina para ancorá-la.
-  ///
-  /// Ela só abre quando a gestação já alcançou a janela em que essa vacina é
-  /// indicada — é o que permite ler uma dTpa como primeira dose de quem chega
-  /// sem histórico a partir da 20ª semana. A semana vem da regra dela no
-  /// calendário, não de um número fixo aqui.
   static bool _podeAbrirOEsquema({
     required RegraCalendario? regraDaDose,
     required int diasGestacaoBruto,
@@ -310,10 +284,6 @@ class VacinasEngine {
     return semanaGestacionalDe(diasGestacaoBruto) >= regraDaDose.semanaInicial;
   }
 
-  /// Doses do esquema básico que o histórico sustenta.
-  ///
-  /// Com o esquema já completo pelas doses da própria vacina, doses de
-  /// outras vacinas são reforço e não ampliam a contagem.
   static int _dosesDoEsquemaBasico({
     required int proprias,
     required int deOutrasVacinas,
@@ -325,8 +295,6 @@ class VacinasEngine {
     return proprias + (deOutrasVacinas < vagas ? deOutrasVacinas : vagas);
   }
 
-  /// Esquema cujo intervalo é contado desde a última dose que contenha os
-  /// componentes exigidos — o caso do dT no PNI-2026.
   static StatusVacinacao _avaliarEsquemaPorUltimaDoseRelevante({
     required RegraDependeHistorico regra,
     required int diasGestacaoBruto,
@@ -338,8 +306,6 @@ class VacinasEngine {
       return _verificar(regra, 'regra sem doses de esquema básico declaradas');
     }
 
-    // Quais vacinas contam vem da composição declarada no calendário, não de
-    // códigos fixos aqui.
     final codigosRelevantes = calendario
         .where((r) => r.composicao.containsAll(regra.componentesDoIntervalo))
         .map((r) => r.codigo)
@@ -370,9 +336,6 @@ class VacinasEngine {
         _inconsistenciaDeNumeracao(proprias, regra.dosesDoEsquemaBasico);
     if (inconsistencia != null) return _verificar(regra, inconsistencia);
 
-    // Com alguma dose da própria vacina o esquema já tem âncora, e as doses de
-    // outras vacinas apenas preenchem as vagas restantes. Sem âncora nenhuma,
-    // só a gestação diz se a outra vacina pode abrir o esquema.
     if (proprias.isEmpty) {
       final porCodigo = {for (final r in calendario) r.codigo: r};
 
@@ -431,8 +394,6 @@ class VacinasEngine {
         nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
         podeRegistrar: true,
         motivo: minimoCumprido
-            // A caracterização da exceção é do profissional; a engine apenas
-            // registra que o mínimo excepcional já passou.
             ? 'dose ${totalDoEsquema + 1}: mínimo excepcional de $excepcional '
                 'cumprido desde ${_soData(ultima)}, recomendado de $recomendado '
                 'completa em ${_soData(liberacao)}'
@@ -475,8 +436,6 @@ class VacinasEngine {
     final aplicadas = relevantes.where(_declaraDoseAplicada).toList(growable: false);
 
     if (aplicadas.isEmpty) {
-      // Esquema de vida: sem registro não se conclui que a usuária nunca
-      // recebeu as doses, então também não se afirma que deve iniciar.
       return verificar('sem dose registrada para determinar o esquema');
     }
 
@@ -488,8 +447,6 @@ class VacinasEngine {
     final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
 
     if (numeros.length >= regra.dosesDoEsquemaBasico) {
-      // Ter as posições preenchidas não basta: o esquema só é dado como
-      // registrado se as datas respeitarem os intervalos mínimos declarados.
       for (final intervalo in regra.intervalosEntreDoses) {
         final inicial = porNumero[intervalo.doseInicial];
         final ultima = porNumero[intervalo.doseFinal];
@@ -550,8 +507,6 @@ class VacinasEngine {
       }
     }
 
-    // Mínimo antes do recomendado: os dois levam a AGUARDAR_INTERVALO, e o
-    // motivo distingue quem já cumpriu o mínimo.
     for (final intervalo in intervalos) {
       final minimo = intervalo.minimo;
       if (minimo == null) continue;
