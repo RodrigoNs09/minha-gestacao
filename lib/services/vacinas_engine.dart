@@ -179,6 +179,7 @@ class VacinasEngine {
           dataAtual: dataAtual,
           historico: historico,
           temporadaInfluenza: temporadaInfluenza,
+          calendario: calendario,
         ),
     ];
   }
@@ -190,6 +191,7 @@ class VacinasEngine {
     required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
     required String? temporadaInfluenza,
+    required List<RegraCalendario> calendario,
   }) {
     
     switch (regra) {
@@ -227,12 +229,227 @@ class VacinasEngine {
         );
 
       case RegraDependeHistorico():
-        return _avaliarDependeHistorico(
-          regra: regra,
-          dataAtual: dataAtual,
-          historico: historico,
-        );
+        return regra.intervaloRecomendadoDesdeUltimaDose != null
+            ? _avaliarEsquemaPorUltimaDoseRelevante(
+                regra: regra,
+                diasGestacaoBruto: diasGestacaoBruto,
+                dataAtual: dataAtual,
+                historico: historico,
+                calendario: calendario,
+              )
+            : _avaliarDependeHistorico(
+                regra: regra,
+                dataAtual: dataAtual,
+                historico: historico,
+              );
     }
+  }
+
+  static StatusVacinacao _verificar(RegraCalendario regra, String motivo) =>
+      StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: motivo,
+      );
+
+  /// Motivo da inconsistência na numeração declarada, ou `null` se coerente.
+  static String? _inconsistenciaDeNumeracao(
+    List<RegistroVacinacao> aplicadas,
+    int dosesDoEsquema,
+  ) {
+    if (aplicadas.any((r) => r.numeroDaDose == null)) {
+      return 'há dose declarada sem posição no esquema';
+    }
+
+    final numeros = aplicadas.map((r) => r.numeroDaDose!).toList(growable: false);
+
+    if (numeros.any((n) => n < 1 || n > dosesDoEsquema)) {
+      return 'há dose com posição fora de 1..$dosesDoEsquema';
+    }
+
+    if (numeros.toSet().length != numeros.length) {
+      return 'há posições de dose repetidas no esquema';
+    }
+
+    // Consistência dos dados, não regra do calendário: uma dose de posição
+    // maior tem de ser posterior às anteriores, e datas iguais também são
+    // inconsistentes. A posição segue vindo só de numeroDaDose.
+    final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
+    final ordenados = numeros.toList()..sort();
+    for (var a = 0; a < ordenados.length - 1; a++) {
+      for (var b = a + 1; b < ordenados.length; b++) {
+        final anterior = porNumero[ordenados[a]]!.dataAplicacao;
+        final posterior = porNumero[ordenados[b]]!.dataAplicacao;
+        if (anterior == null || posterior == null) continue;
+
+        if (!_soData(posterior).isAfter(_soData(anterior))) {
+          return 'dose ${ordenados[b]} não é posterior à dose ${ordenados[a]}';
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Se uma dose de outra vacina com os componentes pode abrir o esquema
+  /// básico sozinha, sem nenhuma dose da própria vacina para ancorá-la.
+  ///
+  /// Ela só abre quando a gestação já alcançou a janela em que essa vacina é
+  /// indicada — é o que permite ler uma dTpa como primeira dose de quem chega
+  /// sem histórico a partir da 20ª semana. A semana vem da regra dela no
+  /// calendário, não de um número fixo aqui.
+  static bool _podeAbrirOEsquema({
+    required RegraCalendario? regraDaDose,
+    required int diasGestacaoBruto,
+  }) {
+    if (regraDaDose is! RegraJanelaSemana) return false;
+    if (!gestacaoPlausivel(diasGestacaoBruto)) return false;
+    return semanaGestacionalDe(diasGestacaoBruto) >= regraDaDose.semanaInicial;
+  }
+
+  /// Doses do esquema básico que o histórico sustenta.
+  ///
+  /// Com o esquema já completo pelas doses da própria vacina, doses de
+  /// outras vacinas são reforço e não ampliam a contagem.
+  static int _dosesDoEsquemaBasico({
+    required int proprias,
+    required int deOutrasVacinas,
+    required int dosesDoEsquema,
+  }) {
+    if (proprias >= dosesDoEsquema) return proprias;
+
+    final vagas = dosesDoEsquema - proprias;
+    return proprias + (deOutrasVacinas < vagas ? deOutrasVacinas : vagas);
+  }
+
+  /// Esquema cujo intervalo é contado desde a última dose que contenha os
+  /// componentes exigidos — o caso do dT no PNI-2026.
+  static StatusVacinacao _avaliarEsquemaPorUltimaDoseRelevante({
+    required RegraDependeHistorico regra,
+    required int diasGestacaoBruto,
+    required DateTime dataAtual,
+    required List<RegistroVacinacao> historico,
+    required List<RegraCalendario> calendario,
+  }) {
+    if (regra.dosesDoEsquemaBasico <= 0) {
+      return _verificar(regra, 'regra sem doses de esquema básico declaradas');
+    }
+
+    // Quais vacinas contam vem da composição declarada no calendário, não de
+    // códigos fixos aqui.
+    final codigosRelevantes = calendario
+        .where((r) => r.composicao.containsAll(regra.componentesDoIntervalo))
+        .map((r) => r.codigo)
+        .toSet();
+
+    final relevantes = historico
+        .where((r) => codigosRelevantes.contains(r.vacinaCodigo))
+        .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
+        .toList(growable: false);
+
+    if (relevantes.any(_temSituacaoIndeterminada)) {
+      return _verificar(regra, 'há registro relevante sem situação determinada');
+    }
+
+    final aplicadas = relevantes.where(_declaraDoseAplicada).toList(growable: false);
+
+    if (aplicadas.isEmpty) {
+      return _verificar(regra, 'sem dose relevante registrada para determinar o '
+          'esquema');
+    }
+
+    final proprias =
+        aplicadas.where((r) => r.vacinaCodigo == regra.codigo).toList(growable: false);
+    final outras =
+        aplicadas.where((r) => r.vacinaCodigo != regra.codigo).toList(growable: false);
+
+    final inconsistencia =
+        _inconsistenciaDeNumeracao(proprias, regra.dosesDoEsquemaBasico);
+    if (inconsistencia != null) return _verificar(regra, inconsistencia);
+
+    // Com alguma dose da própria vacina o esquema já tem âncora, e as doses de
+    // outras vacinas apenas preenchem as vagas restantes. Sem âncora nenhuma,
+    // só a gestação diz se a outra vacina pode abrir o esquema.
+    if (proprias.isEmpty) {
+      final porCodigo = {for (final r in calendario) r.codigo: r};
+
+      final semPosicao = outras.any((dose) => !_podeAbrirOEsquema(
+            regraDaDose: porCodigo[dose.vacinaCodigo],
+            diasGestacaoBruto: diasGestacaoBruto,
+          ));
+
+      if (semPosicao) {
+        return _verificar(regra, 'sem dose desta vacina e sem contexto '
+            'gestacional para posicionar a dose de outra vacina no esquema');
+      }
+    }
+
+    final totalDoEsquema = _dosesDoEsquemaBasico(
+      proprias: proprias.length,
+      deOutrasVacinas: outras.length,
+      dosesDoEsquema: regra.dosesDoEsquemaBasico,
+    );
+
+    if (totalDoEsquema >= regra.dosesDoEsquemaBasico) {
+      final deOutras = totalDoEsquema - proprias.length;
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.registrada,
+        mensagem: mensagemDoseRegistrada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
+        podeRegistrar: false,
+        motivo: 'esquema de ${regra.dosesDoEsquemaBasico} doses completo: '
+            '${proprias.length} de ${regra.codigo} e $deOutras de outra vacina '
+            'com os componentes',
+      );
+    }
+
+    if (aplicadas.any((r) => r.dataAplicacao == null)) {
+      return _verificar(regra, 'há dose relevante sem data: intervalo não '
+          'verificável');
+    }
+
+    final ultima = aplicadas
+        .map((r) => r.dataAplicacao!)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+
+    final recomendado = regra.intervaloRecomendadoDesdeUltimaDose!;
+    final liberacao = _somarIntervalo(ultima, recomendado);
+
+    if (!_naoPosteriorA(liberacao, dataAtual)) {
+      final excepcional = regra.intervaloMinimoExcepcionalDesdeUltimaDose;
+      final minimoCumprido = excepcional != null &&
+          _naoPosteriorA(_somarIntervalo(ultima, excepcional), dataAtual);
+
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.aguardarIntervalo,
+        mensagem: mensagemAguardarIntervalo,
+        nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
+        podeRegistrar: true,
+        motivo: minimoCumprido
+            // A caracterização da exceção é do profissional; a engine apenas
+            // registra que o mínimo excepcional já passou.
+            ? 'dose ${totalDoEsquema + 1}: mínimo excepcional de $excepcional '
+                'cumprido desde ${_soData(ultima)}, recomendado de $recomendado '
+                'completa em ${_soData(liberacao)}'
+            : 'dose ${totalDoEsquema + 1}: intervalo recomendado de $recomendado '
+                'desde ${_soData(ultima)} completa em ${_soData(liberacao)}',
+      );
+    }
+
+    return StatusVacinacao(
+      vacinaCodigo: regra.codigo,
+      estado: EstadoVacina.periodoRecomendado,
+      mensagem: mensagemPeriodoRecomendado,
+      nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+      podeRegistrar: true,
+      motivo: 'dose ${totalDoEsquema + 1} de ${regra.dosesDoEsquemaBasico}: '
+          'intervalo recomendado cumprido desde ${_soData(ultima)}',
+    );
   }
 
   static StatusVacinacao _avaliarDependeHistorico({
@@ -240,25 +457,10 @@ class VacinasEngine {
     required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
   }) {
-    StatusVacinacao verificar(String motivo) => StatusVacinacao(
-          vacinaCodigo: regra.codigo,
-          estado: EstadoVacina.verificarHistorico,
-          mensagem: mensagemVerificarHistorico,
-          nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
-          podeRegistrar: true,
-          motivo: motivo,
-        );
+    StatusVacinacao verificar(String motivo) => _verificar(regra, motivo);
 
     if (regra.dosesDoEsquemaBasico <= 0) {
       return verificar('regra sem doses de esquema básico declaradas');
-    }
-
-    // O mecanismo de intervalo desde a última dose com determinados
-    // componentes é de outra etapa; regras que o declaram não são avaliadas
-    // por este caminho.
-    if (regra.intervaloRecomendadoDesdeUltimaDose != null) {
-      return verificar('avaliação por intervalo desde a última dose ainda não '
-          'implementada nesta versão');
     }
 
     final relevantes = historico
@@ -278,38 +480,12 @@ class VacinasEngine {
       return verificar('sem dose registrada para determinar o esquema');
     }
 
-    if (aplicadas.any((r) => r.numeroDaDose == null)) {
-      return verificar('há dose declarada sem posição no esquema');
-    }
+    final inconsistencia =
+        _inconsistenciaDeNumeracao(aplicadas, regra.dosesDoEsquemaBasico);
+    if (inconsistencia != null) return verificar(inconsistencia);
 
     final numeros = aplicadas.map((r) => r.numeroDaDose!).toList(growable: false);
-
-    if (numeros.any((n) => n < 1 || n > regra.dosesDoEsquemaBasico)) {
-      return verificar('há dose com posição fora de 1..${regra.dosesDoEsquemaBasico}');
-    }
-
-    if (numeros.toSet().length != numeros.length) {
-      return verificar('há posições de dose repetidas no esquema');
-    }
-
     final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
-
-    // Consistência dos dados, não regra do calendário: uma dose de posição
-    // maior tem de ser posterior às anteriores. Datas iguais também são
-    // inconsistentes, e a posição segue vindo só de numeroDaDose.
-    final ordenados = numeros.toList()..sort();
-    for (var a = 0; a < ordenados.length - 1; a++) {
-      for (var b = a + 1; b < ordenados.length; b++) {
-        final anterior = porNumero[ordenados[a]]!.dataAplicacao;
-        final posterior = porNumero[ordenados[b]]!.dataAplicacao;
-        if (anterior == null || posterior == null) continue;
-
-        if (!_soData(posterior).isAfter(_soData(anterior))) {
-          return verificar('dose ${ordenados[b]} não é posterior à dose '
-              '${ordenados[a]}');
-        }
-      }
-    }
 
     if (numeros.length >= regra.dosesDoEsquemaBasico) {
       // Ter as posições preenchidas não basta: o esquema só é dado como
