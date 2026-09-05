@@ -684,6 +684,59 @@ void main() {
       expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
     });
 
+    test('8b. situação desconhecida sem DUM: VERIFICAR_HISTORICO', () {
+      // Sem vínculo, o registro não é atribuído a esta gestação — mas o
+      // intervalo desta regra conta qualquer dose anterior, então não dá
+      // para concluir que não há dose a considerar.
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: DateTime(2026, 6, 1),
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('8c. situação desconhecida sem DUM e sem data: VERIFICAR_HISTORICO',
+        () {
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: null,
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('8d. situação desconhecida de outra gestação não infere vínculo', () {
+      // O registro traz DUM de outra gestação: a relevância dele está
+      // determinada, e a engine não o puxa para esta gestação.
+      final covid = covidEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          doseCovid(
+            dataAplicacao: DateTime(2020, 6, 1),
+            dumNoRegistro: DateTime(2020, 3, 10),
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+      );
+
+      expect(covid.estado, EstadoVacina.periodoRecomendado);
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+    });
+
     test('dose aplicada sem data não permite afirmar o intervalo', () {
       final covid = covidEm(
         diasGestacaoBruto: 200,
@@ -1297,6 +1350,8 @@ void main() {
       expect(status.estado, EstadoVacina.aguardarIntervalo);
       expect(status.motivo, contains('mínimo'));
       expect(status.motivo, isNot(contains('mínimo cumprido')));
+      // O mínimo realmente não foi cumprido: a mensagem pode dizer isso.
+      expect(status.mensagem, mensagemAguardarIntervalo);
     });
 
     test('8. mínimos cumpridos mas recomendado 1→3 não: AGUARDAR_INTERVALO', () {
@@ -1312,6 +1367,22 @@ void main() {
 
       expect(status.estado, EstadoVacina.aguardarIntervalo);
       expect(status.motivo, contains('mínimo cumprido'));
+      // A mensagem não pode afirmar que o mínimo falta: ele foi cumprido.
+      expect(status.mensagem, mensagemAguardarRecomendado);
+      expect(status.mensagem, isNot(mensagemAguardarIntervalo));
+    });
+
+    test('8b. as duas mensagens de espera são distintas entre si', () {
+      expect(mensagemAguardarRecomendado, isNot(mensagemAguardarIntervalo));
+      expect(
+        mensagemAguardarIntervalo.toLowerCase(),
+        contains('ainda não foi cumprido o intervalo mínimo'),
+      );
+      expect(
+        mensagemAguardarRecomendado.toLowerCase(),
+        contains('intervalo mínimo desde a última dose registrada já foi '
+            'cumprido'),
+      );
     });
 
     test('9. recomendado 1→3 exatamente atingido: PERIODO_RECOMENDADO', () {
@@ -1339,6 +1410,61 @@ void main() {
       expect(status.estado, EstadoVacina.registrada);
       expect(status.mensagem, mensagemDoseRegistrada);
       expect(status.podeRegistrar, isFalse);
+    });
+
+    test('10i. três doses com a dose 3 no futuro: não é REGISTRADA', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          // Erro de digitação no ano: os três intervalos mínimos passam,
+          // mas a dose ainda não aconteceu.
+          dose(numero: 3, data: DateTime(2027, 1, 10)),
+        ],
+        dataAtual: DateTime(2026, 9, 5),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.podeRegistrar, isTrue);
+      expect(status.motivo, contains('futuro'));
+    });
+
+    test('10j. dose futura no limite: o próprio dia de hoje ainda completa',
+        () {
+      final hoje = DateTime(2026, 9, 5);
+
+      final noFuturo = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 9, 6)),
+        ],
+        dataAtual: hoje,
+      );
+      final hojeMesmo = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: hoje),
+        ],
+        dataAtual: hoje,
+      );
+
+      expect(noFuturo.estado, EstadoVacina.verificarHistorico);
+      expect(hojeMesmo.estado, EstadoVacina.registrada);
+    });
+
+    test('10k. dose futura em esquema incompleto segue em AGUARDAR_INTERVALO',
+        () {
+      // Contraste com 10i: a regra de dose futura só vale para o esquema
+      // completo, e o comportamento conservador anterior é preservado.
+      final status = hepatiteEm(
+        historico: [dose(numero: 1, data: DateTime(2027, 1, 1))],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      expect(status.estado, EstadoVacina.aguardarIntervalo);
     });
 
     test('10b. três doses com uma data ausente: VERIFICAR_HISTORICO', () {
@@ -2217,6 +2343,93 @@ void main() {
       expect(gestacaoAtual.estado, EstadoVacina.registrada);
     });
 
+    test('8k. dTpa duplicada na mesma data não completa o esquema', () {
+      final duplicada = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDtpa(data: DateTime(2026, 3, 10)),
+          doseDtpa(data: DateTime(2026, 3, 10)),
+        ],
+      );
+      final emDatasDistintas = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDtpa(data: DateTime(2026, 3, 10)),
+          doseDtpa(data: DateTime(2026, 5, 10)),
+        ],
+      );
+
+      expect(duplicada.estado, EstadoVacina.verificarHistorico);
+      expect(duplicada.estado, isNot(EstadoVacina.registrada));
+      expect(duplicada.motivo, contains('indistinguíveis'));
+      // Contraste: datas distintas continuam sendo duas doses.
+      expect(emDatasDistintas.estado, EstadoVacina.registrada);
+    });
+
+    test('8l. duas dTpa sem data são indistinguíveis entre si', () {
+      final status = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDtpa(
+            data: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+          doseDtpa(
+            data: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('8m. com o esquema completo por dT a duplicidade não muda nada', () {
+      // As doses de outra vacina já são reforço: não ocupam posição e não
+      // precisam ser distinguidas entre si.
+      final status = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDt(numero: 2, data: DateTime(2026, 3, 10)),
+          doseDt(numero: 3, data: DateTime(2026, 5, 10)),
+          doseDtpa(data: DateTime(2026, 7, 10)),
+          doseDtpa(data: DateTime(2026, 7, 10)),
+        ],
+      );
+
+      expect(status.estado, EstadoVacina.registrada);
+    });
+
+    test('8n. três dT com a última no futuro: não é REGISTRADA', () {
+      final status = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDt(numero: 2, data: DateTime(2026, 3, 10)),
+          doseDt(numero: 3, data: DateTime(2027, 5, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.motivo, contains('futuro'));
+    });
+
+    test('8o. dTpa no futuro não completa o esquema', () {
+      final status = dtEm(
+        historico: [
+          doseDt(numero: 1, data: DateTime(2026, 1, 10)),
+          doseDt(numero: 2, data: DateTime(2026, 3, 10)),
+          doseDtpa(data: DateTime(2027, 5, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
     test('9. dTpa é dose relevante para o intervalo', () {
       // dTpa recente segura a próxima dose, mesmo o esquema estando incompleto.
       final status = dtEm(
@@ -2354,6 +2567,9 @@ void main() {
       expect(aposOMinimo.motivo, contains('excepcional'));
       // Mesmo estado: a engine não caracteriza a exceção.
       expect(antesDoMinimo.estado, aposOMinimo.estado);
+      // Mas a mensagem acompanha o motivo, sem afirmar o contrário dele.
+      expect(antesDoMinimo.mensagem, mensagemAguardarIntervalo);
+      expect(aposOMinimo.mensagem, mensagemAguardarRecomendado);
     });
 
     test('26. a dose relevante mais recente determina o intervalo', () {
@@ -2499,6 +2715,44 @@ void main() {
       ]);
 
       expect(status.estado, EstadoVacina.registrada);
+    });
+
+    test('sem componentes declarados, nenhuma vacina entra na contagem', () {
+      // containsAll de um conjunto vazio é verdadeiro para toda regra: sem a
+      // guarda, qualquer dose do calendário contaria como dose desta vacina.
+      const codigoSemComponentes = 'SEM_COMPONENTES_DE_TESTE';
+
+      final calendarioSemComponentes = <RegraCalendario>[
+        const RegraDependeHistorico(
+          codigo: codigoSemComponentes,
+          nomeExibicao: 'Sem componentes de teste',
+          versaoCalendario: versaoCalendarioPni2026,
+          dosesDoEsquemaBasico: 2,
+          reiniciaEsquemaIniciado: false,
+          intervaloRecomendadoDesdeUltimaDose: Intervalo.dias(60),
+        ),
+        const RegraDependeTemporada(
+          codigo: 'OUTRA_DE_TESTE',
+          nomeExibicao: 'Outra de teste',
+          versaoCalendario: versaoCalendarioPni2026,
+          dosesPorTemporada: 1,
+        ),
+      ];
+
+      final status = VacinasEngine.avaliar(
+        diasGestacaoBruto: 200,
+        dum: dum,
+        dataAtual: DateTime(2026, 8, 1),
+        historico: [
+          registro(codigoSemComponentes, DateTime(2026, 1, 10), numero: 1),
+          registro('OUTRA_DE_TESTE', DateTime(2026, 3, 10)),
+        ],
+        calendario: calendarioSemComponentes,
+      ).firstWhere((s) => s.vacinaCodigo == codigoSemComponentes);
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.motivo, contains('componentes'));
     });
   });
 
