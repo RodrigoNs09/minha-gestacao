@@ -222,8 +222,11 @@ void main() {
     });
 
     test('registrada permanece registrada mesmo com gestação indeterminada', () {
+      // dataAtual explícita: sem ela o helper derivaria uma data anterior à
+      // dose, que agora seria lida como aplicação no futuro.
       final resultado = avaliarEm(
         diasGestacaoBruto: -30,
+        dataAtual: DateTime(2026, 7, 1),
         historico: [doseRegistrada(codigoDtpa, dumNoRegistro: dum)],
       );
 
@@ -1068,11 +1071,11 @@ void main() {
     });
 
     test('12. a data de aplicação não influencia a decisão', () {
+      // Qualquer data válida serve: a temporada é a chave, não a data.
       final datas = <DateTime?>[
         null,
         DateTime(2020, 1, 1),
         DateTime(2026, 4, 15),
-        DateTime(2099, 12, 31),
       ];
 
       for (final data in datas) {
@@ -1082,6 +1085,21 @@ void main() {
 
         expect(influenza.estado, EstadoVacina.registrada, reason: 'data: $data');
       }
+    });
+
+    test('12c. data no futuro não encerra a temporada', () {
+      final influenza = influenzaEm(
+        historico: [
+          doseInfluenza(
+            temporada: temporadaAtual,
+            dataAplicacao: DateTime(2099, 12, 31),
+          ),
+        ],
+      );
+
+      expect(influenza.estado, EstadoVacina.verificarHistorico);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+      expect(influenza.motivo, contains('futuro'));
     });
 
     test('12b. data recente de temporada anterior não vira dose atual', () {
@@ -1455,16 +1473,26 @@ void main() {
       expect(hojeMesmo.estado, EstadoVacina.registrada);
     });
 
-    test('10k. dose futura em esquema incompleto segue em AGUARDAR_INTERVALO',
+    test('10k. dose futura conclui igual em esquema completo e incompleto',
         () {
-      // Contraste com 10i: a regra de dose futura só vale para o esquema
-      // completo, e o comportamento conservador anterior é preservado.
-      final status = hepatiteEm(
+      final incompleto = hepatiteEm(
         historico: [dose(numero: 1, data: DateTime(2027, 1, 1))],
         dataAtual: DateTime(2026, 6, 1),
       );
+      final completo = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2027, 1, 10)),
+        ],
+        dataAtual: DateTime(2026, 6, 1),
+      );
 
-      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      // Uma dose que ainda não aconteceu não sustenta conclusão nenhuma,
+      // esteja o esquema completo ou não.
+      expect(incompleto.estado, EstadoVacina.verificarHistorico);
+      expect(completo.estado, EstadoVacina.verificarHistorico);
+      expect(incompleto.estado, completo.estado);
     });
 
     test('10b. três doses com uma data ausente: VERIFICAR_HISTORICO', () {
@@ -1796,14 +1824,16 @@ void main() {
       expect(status.motivo, contains('dose 3'));
     });
 
-    test('19. dose com data futura mantém o esquema em espera', () {
+    test('19. dose com data futura não sustenta nenhuma conclusão', () {
       final status = hepatiteEm(
         historico: [dose(numero: 1, data: DateTime(2027, 1, 1))],
         dataAtual: DateTime(2026, 6, 1),
       );
 
-      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      expect(status.estado, EstadoVacina.verificarHistorico);
       expect(status.estado, isNot(EstadoVacina.periodoRecomendado));
+      expect(status.estado, isNot(EstadoVacina.aguardarIntervalo));
+      expect(status.motivo, contains('futuro'));
     });
 
     test('20. virada de mês e ano bissexto na aritmética dos intervalos', () {
@@ -2897,6 +2927,158 @@ void main() {
         resultado.map((s) => s.vacinaCodigo).toList(),
         calendarioPni2026.map((r) => r.codigo).toList(),
       );
+    });
+  });
+
+  group('Data de aplicação no futuro', () {
+    final hoje = DateTime(2026, 8, 1);
+    final amanha = DateTime(2026, 8, 2);
+    final ontem = DateTime(2026, 7, 31);
+
+    RegistroVacinacao dose(
+      String codigo, {
+      required DateTime? data,
+      DateTime? dumNoRegistro,
+      String? temporada,
+      int? numero,
+    }) {
+      return RegistroVacinacao(
+        vacinaCodigo: codigo,
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: versaoCalendarioPni2026,
+        dataAplicacao: data,
+        dumNoRegistro: dumNoRegistro,
+        temporadaNoRegistro: temporada,
+        numeroDaDose: numero,
+      );
+    }
+
+    StatusVacinacao statusPara(
+      String codigo,
+      List<RegistroVacinacao> historico, {
+      String? temporada,
+    }) {
+      return statusDe(
+        avaliarEm(
+          diasGestacaoBruto: 200,
+          dataAtual: hoje,
+          historico: historico,
+          temporadaInfluenza: temporada,
+        ),
+        codigo,
+      );
+    }
+
+    test('1. dTpa com data futura não vira REGISTRADA', () {
+      final dtpa = statusPara(codigoDtpa, [
+        dose(codigoDtpa, data: amanha, dumNoRegistro: dum),
+      ]);
+
+      expect(dtpa.estado, EstadoVacina.verificarHistorico);
+      expect(dtpa.estado, isNot(EstadoVacina.registrada));
+      expect(dtpa.motivo, contains('futuro'));
+    });
+
+    test('2. VSR com data futura não vira REGISTRADA', () {
+      final vsr = statusPara(codigoVsr, [
+        dose(codigoVsr, data: amanha, dumNoRegistro: dum),
+      ]);
+
+      expect(vsr.estado, EstadoVacina.verificarHistorico);
+      expect(vsr.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('3. COVID-19 com data futura não vira REGISTRADA', () {
+      final covid = statusPara(codigoCovid19, [
+        dose(codigoCovid19, data: amanha, dumNoRegistro: dum),
+      ]);
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.registrada));
+      expect(covid.motivo, contains('futuro'));
+    });
+
+    test('4. influenza com data futura não encerra a temporada avaliada', () {
+      final influenza = statusPara(
+        codigoInfluenza,
+        [dose(codigoInfluenza, data: amanha, temporada: '2026')],
+        temporada: '2026',
+      );
+
+      expect(influenza.estado, EstadoVacina.verificarHistorico);
+      expect(influenza.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('5. registro futuro não satisfaz a contagem de doses do esquema', () {
+      // Três doses de dT, a terceira ainda não aplicada: não é esquema
+      // completo.
+      final dt = statusPara(codigoDt, [
+        dose(codigoDt, data: DateTime(2026, 1, 10), numero: 1),
+        dose(codigoDt, data: DateTime(2026, 3, 10), numero: 2),
+        dose(codigoDt, data: amanha, numero: 3),
+      ]);
+
+      expect(dt.estado, EstadoVacina.verificarHistorico);
+      expect(dt.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('6. registro futuro não cumpre o intervalo mínimo', () {
+      // Sozinha, uma dose de amanhã não libera nada por intervalo.
+      final covid = statusPara(codigoCovid19, [
+        dose(codigoCovid19, data: amanha),
+      ]);
+
+      expect(covid.estado, EstadoVacina.verificarHistorico);
+      expect(covid.estado, isNot(EstadoVacina.periodoRecomendado));
+      expect(covid.estado, isNot(EstadoVacina.aguardarIntervalo));
+    });
+
+    test('7. a dose válida anterior continua sendo considerada', () {
+      final dtpa = statusPara(codigoDtpa, [
+        dose(codigoDtpa, data: ontem, dumNoRegistro: dum),
+        dose(codigoDtpa, data: amanha, dumNoRegistro: dum),
+      ]);
+
+      // A dose de ontem já encerra a dose por gestação; a de amanhã não
+      // apaga isso nem melhora a conclusão.
+      expect(dtpa.estado, EstadoVacina.registrada);
+    });
+
+    test('8. data igual à dataAtual continua válida', () {
+      final dtpa = statusPara(codigoDtpa, [
+        dose(codigoDtpa, data: hoje, dumNoRegistro: dum),
+      ]);
+
+      expect(dtpa.estado, EstadoVacina.registrada);
+      expect(dtpa.estado, isNot(EstadoVacina.verificarHistorico));
+    });
+
+    test('8b. a borda é o dia, não o instante', () {
+      final noFimDoDia = statusPara(codigoDtpa, [
+        dose(codigoDtpa, data: DateTime(2026, 8, 1, 23, 59), dumNoRegistro: dum),
+      ]);
+
+      expect(noFimDoDia.estado, EstadoVacina.registrada);
+    });
+
+    test('uma dose sem data nunca é lida como futura', () {
+      final semData = statusDe(
+        avaliarEm(
+          diasGestacaoBruto: 200,
+          dataAtual: hoje,
+          historico: [
+            RegistroVacinacao(
+              vacinaCodigo: codigoDtpa,
+              situacaoInformada: SituacaoInformada.aplicadaDataDesconhecida,
+              versaoCalendario: versaoCalendarioPni2026,
+              dumNoRegistro: dum,
+            ),
+          ],
+        ),
+        codigoDtpa,
+      );
+
+      expect(semData.estado, EstadoVacina.registrada);
     });
   });
 

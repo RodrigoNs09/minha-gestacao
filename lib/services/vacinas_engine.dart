@@ -200,6 +200,7 @@ class VacinasEngine {
           regra: regra,
           diasGestacaoBruto: diasGestacaoBruto,
           dum: dum,
+          dataAtual: dataAtual,
           historico: historico,
         );
 
@@ -214,6 +215,7 @@ class VacinasEngine {
       case RegraDependeTemporada():
         return _avaliarTemporada(
           regra: regra,
+          dataAtual: dataAtual,
           historico: historico,
           temporadaVigente: temporadaInfluenza,
         );
@@ -354,11 +356,18 @@ class VacinasEngine {
         .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
         .toList(growable: false);
 
+    if (relevantes.any((r) => _dataNoFuturo(r, dataAtual))) {
+      return _verificar(regra, 'há registro relevante com data de aplicação '
+          'no futuro');
+    }
+
     if (relevantes.any(_temSituacaoIndeterminada)) {
       return _verificar(regra, 'há registro relevante sem situação determinada');
     }
 
-    final aplicadas = relevantes.where(_declaraDoseAplicada).toList(growable: false);
+    final aplicadas = relevantes
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .toList(growable: false);
 
     if (aplicadas.isEmpty) {
       return _verificar(regra, 'sem dose relevante registrada para determinar o '
@@ -481,11 +490,18 @@ class VacinasEngine {
         .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
         .toList(growable: false);
 
+    if (relevantes.any((r) => _dataNoFuturo(r, dataAtual))) {
+      return verificar('há registro desta vacina com data de aplicação no '
+          'futuro');
+    }
+
     if (relevantes.any(_temSituacaoIndeterminada)) {
       return verificar('há registro desta vacina sem situação determinada');
     }
 
-    final aplicadas = relevantes.where(_declaraDoseAplicada).toList(growable: false);
+    final aplicadas = relevantes
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .toList(growable: false);
 
     if (aplicadas.isEmpty) {
       return verificar('sem dose registrada para determinar o esquema');
@@ -618,6 +634,7 @@ class VacinasEngine {
 
   static StatusVacinacao _avaliarTemporada({
     required RegraDependeTemporada regra,
+    required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
     required String? temporadaVigente,
   }) {
@@ -648,7 +665,8 @@ class VacinasEngine {
         .where((r) => r.temporadaNoRegistro == temporadaVigente)
         .toList(growable: false);
 
-    final aplicadas = daTemporada.where(_declaraDoseAplicada).length;
+    final aplicadas =
+        daTemporada.where((r) => _declaraDoseAplicada(r, dataAtual)).length;
     if (aplicadas >= regra.dosesPorTemporada) {
       return StatusVacinacao(
         vacinaCodigo: regra.codigo,
@@ -658,6 +676,17 @@ class VacinasEngine {
         podeRegistrar: false,
         motivo: 'doses da temporada $temporadaVigente registradas pela '
             'usuária: $aplicadas de ${regra.dosesPorTemporada}',
+      );
+    }
+
+    if (daTemporada.any((r) => _dataNoFuturo(r, dataAtual))) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta temporada com data de aplicação no futuro',
       );
     }
 
@@ -709,7 +738,8 @@ class VacinasEngine {
       );
     }
 
-    final aplicadasNestaGestacao = destaGestacao.where(_declaraDoseAplicada).length;
+    final aplicadasNestaGestacao =
+        destaGestacao.where((r) => _declaraDoseAplicada(r, dataAtual)).length;
     if (aplicadasNestaGestacao >= dosesPrevistas) {
       return StatusVacinacao(
         vacinaCodigo: regra.codigo,
@@ -725,6 +755,17 @@ class VacinasEngine {
     // Um registro indeterminado sem DUM não é atribuído a gestação nenhuma,
     // mas o intervalo desta regra é contado sobre qualquer dose anterior:
     // sem saber se ele é dose, não dá para concluir sobre o intervalo.
+    if (registros.any((r) => _dataNoFuturo(r, dataAtual))) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta vacina com data de aplicação no futuro',
+      );
+    }
+
     final indeterminadosRelevantes = registros
         .where(_temSituacaoIndeterminada)
         .where((r) => r.dumNoRegistro == null || _pertenceAGestacaoAtual(r, dum))
@@ -741,8 +782,9 @@ class VacinasEngine {
       );
     }
 
-    final dosesAplicadas =
-        registros.where(_declaraDoseAplicada).toList(growable: false);
+    final dosesAplicadas = registros
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .toList(growable: false);
 
     if (dosesAplicadas.isEmpty) {
       return StatusVacinacao(
@@ -813,6 +855,7 @@ class VacinasEngine {
     required RegraJanelaSemana regra,
     required int diasGestacaoBruto,
     required DateTime dum,
+    required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
   }) {
   
@@ -833,8 +876,9 @@ class VacinasEngine {
       );
     }
 
-    final dosesAplicadas =
-        registrosDestaGestacao.where(_declaraDoseAplicada).length;
+    final dosesAplicadas = registrosDestaGestacao
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .length;
 
     if (dosesAplicadas >= dosesPrevistas) {
       return StatusVacinacao(
@@ -845,6 +889,17 @@ class VacinasEngine {
         podeRegistrar: false,
         motivo: 'doses desta gestação registradas pela usuária: '
             '$dosesAplicadas de $dosesPrevistas',
+      );
+    }
+
+    if (registrosDestaGestacao.any((r) => _dataNoFuturo(r, dataAtual))) {
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.verificarHistorico,
+        mensagem: mensagemVerificarHistorico,
+        nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
+        podeRegistrar: true,
+        motivo: 'há registro desta vacina com data de aplicação no futuro',
       );
     }
 
@@ -905,7 +960,18 @@ class VacinasEngine {
     return _mesmoDia(dumDoRegistro, dum);
   }
 
-  static bool _declaraDoseAplicada(RegistroVacinacao registro) {
+  static bool _dataNoFuturo(RegistroVacinacao registro, DateTime dataAtual) {
+    final data = registro.dataAplicacao;
+    return data != null && _soData(data).isAfter(_soData(dataAtual));
+  }
+
+  static bool _declaraDoseAplicada(
+    RegistroVacinacao registro,
+    DateTime dataAtual,
+  ) {
+    
+    if (_dataNoFuturo(registro, dataAtual)) return false;
+
     return registro.situacaoInformada == SituacaoInformada.aplicadaComData ||
         registro.situacaoInformada == SituacaoInformada.aplicadaDataDesconhecida;
   }
