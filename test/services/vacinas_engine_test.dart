@@ -1187,15 +1187,770 @@ void main() {
     });
   });
 
-  group('Condicionais ainda não avaliadas (Etapa seguinte)', () {
-    test('hepatite B e dT não afirmam período recomendado', () {
-      final resultado = avaliarEm(diasGestacaoBruto: 200);
+  group('Hepatite B — esquema de 3 doses', () {
+    final primeiraDose = DateTime(2026, 1, 10);
 
-      for (final codigo in [codigoHepatiteB, codigoDt]) {
-        final status = statusDe(resultado, codigo);
-        expect(status.estado, EstadoVacina.verificarHistorico, reason: codigo);
-        expect(status.estado, isNot(EstadoVacina.periodoRecomendado), reason: codigo);
+    RegistroVacinacao dose({
+      required int? numero,
+      DateTime? data,
+      SituacaoInformada situacao = SituacaoInformada.aplicadaComData,
+      DateTime? dumNoRegistro,
+      String codigo = codigoHepatiteB,
+    }) {
+      return RegistroVacinacao(
+        vacinaCodigo: codigo,
+        situacaoInformada: situacao,
+        versaoCalendario: versaoCalendarioPni2026,
+        numeroDaDose: numero,
+        dataAplicacao: data,
+        dumNoRegistro: dumNoRegistro,
+      );
+    }
+
+    StatusVacinacao hepatiteEm({
+      List<RegistroVacinacao> historico = const [],
+      required DateTime dataAtual,
+    }) {
+      return statusDe(
+        avaliarEm(
+          diasGestacaoBruto: 200,
+          historico: historico,
+          dataAtual: dataAtual,
+        ),
+        codigoHepatiteB,
+      );
+    }
+
+    test('1. zero doses: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(dataAtual: DateTime(2026, 6, 1));
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('2. dose 1 com recomendado ainda não atingido: AGUARDAR_INTERVALO', () {
+      final status = hepatiteEm(
+        historico: [dose(numero: 1, data: primeiraDose)],
+        dataAtual: DateTime(2026, 1, 20),
+      );
+
+      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      expect(status.mensagem, mensagemAguardarIntervalo);
+    });
+
+    test('3. dose 1 com recomendado atingido: PERIODO_RECOMENDADO', () {
+      final status = hepatiteEm(
+        historico: [dose(numero: 1, data: primeiraDose)],
+        dataAtual: DateTime(2026, 2, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.mensagem, mensagemPeriodoRecomendado);
+    });
+
+    test('4. dose 1 sem data: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(
+            numero: 1,
+            data: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+    });
+
+    test('5. dose aplicada sem numeroDaDose: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(
+        historico: [dose(numero: null, data: primeiraDose)],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, contains('sem posição'));
+    });
+
+    test('6. duas doses válidas, dose 3 liberada pelo recomendado', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+        ],
+        dataAtual: DateTime(2026, 7, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('7. dose 3 abaixo do mínimo 2→3: AGUARDAR_INTERVALO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+        ],
+        dataAtual: DateTime(2026, 3, 1),
+      );
+
+      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      expect(status.motivo, contains('mínimo'));
+      expect(status.motivo, isNot(contains('mínimo cumprido')));
+    });
+
+    test('8. mínimos cumpridos mas recomendado 1→3 não: AGUARDAR_INTERVALO', () {
+      // 10/01 + 4 meses (mínimo 1→3) = 10/05; 10/02 + 2 meses = 10/04.
+      // O recomendado 1→3 (6 meses) só completa em 10/07.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+        ],
+        dataAtual: DateTime(2026, 5, 10),
+      );
+
+      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      expect(status.motivo, contains('mínimo cumprido'));
+    });
+
+    test('9. recomendado 1→3 exatamente atingido: PERIODO_RECOMENDADO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+        ],
+        dataAtual: DateTime(2026, 7, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('10. três doses válidas: REGISTRADA', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 7, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.registrada);
+      expect(status.mensagem, mensagemDoseRegistrada);
+      expect(status.podeRegistrar, isFalse);
+    });
+
+    test('10b. três doses com uma data ausente: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(
+            numero: 2,
+            data: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+          dose(numero: 3, data: DateTime(2026, 7, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('cronologia: dose 2 anterior à dose 1, com esquema incompleto', () {
+      // A inconsistência é detectada mesmo faltando a terceira dose.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: DateTime(2026, 3, 10)),
+          dose(numero: 2, data: DateTime(2026, 1, 10)),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.periodoRecomendado));
+      expect(status.motivo, contains('não é posterior'));
+    });
+
+    test('cronologia: dose 3 anterior à dose 1', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: DateTime(2026, 6, 10)),
+          dose(numero: 2, data: DateTime(2026, 7, 10)),
+          dose(numero: 3, data: DateTime(2026, 1, 10)),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('cronologia: duas doses numeradas na mesma data', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: primeiraDose),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.motivo, contains('não é posterior'));
+    });
+
+    test('cronologia: três doses na mesma data não formam esquema completo', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: primeiraDose),
+          dose(numero: 3, data: primeiraDose),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('cronologia: dose sem data não dispara falso positivo', () {
+      // Sem data não há como comparar; o caminho segue para as demais
+      // validações, que exigem data.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(
+            numero: 2,
+            data: null,
+            situacao: SituacaoInformada.aplicadaDataDesconhecida,
+          ),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, isNot(contains('não é posterior')));
+    });
+
+    test('cronologia: doses corretamente ordenadas seguem válidas', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 7, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.registrada);
+    });
+
+    test('cronologia: ordem de entrada embaralhada não muda o resultado', () {
+      final coerentes = [
+        dose(numero: 3, data: DateTime(2026, 7, 10)),
+        dose(numero: 1, data: primeiraDose),
+        dose(numero: 2, data: DateTime(2026, 2, 10)),
+      ];
+
+      final a = hepatiteEm(historico: coerentes, dataAtual: DateTime(2026, 8, 1));
+      final b = hepatiteEm(
+        historico: coerentes.reversed.toList(),
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(a.estado, EstadoVacina.registrada);
+      expect(a.estado, b.estado);
+      expect(a.motivo, b.motivo);
+    });
+
+    test('10c. dose 2 anterior à dose 1: não é REGISTRADA', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: DateTime(2026, 3, 10)),
+          dose(numero: 2, data: DateTime(2026, 1, 10)),
+          dose(numero: 3, data: DateTime(2026, 9, 10)),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.motivo, contains('não é posterior'));
+    });
+
+    test('10d. dose 3 anterior à dose 2: não é REGISTRADA', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 6, 10)),
+          dose(numero: 3, data: DateTime(2026, 3, 10)),
+        ],
+        dataAtual: DateTime(2026, 10, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('10e. mínimo 1→2 não cumprido: não é REGISTRADA', () {
+      // 10/01 → 20/01: menos de 1 mês entre a 1ª e a 2ª dose.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 1, 20)),
+          dose(numero: 3, data: DateTime(2026, 8, 10)),
+        ],
+        dataAtual: DateTime(2026, 9, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+      expect(status.motivo, contains('mínimo'));
+    });
+
+    test('10f. mínimo 2→3 não cumprido: não é REGISTRADA', () {
+      // 10/02 → 20/02: menos de 2 meses entre a 2ª e a 3ª dose.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 2, 20)),
+        ],
+        dataAtual: DateTime(2026, 9, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('10g. mínimo 1→3 não cumprido: não é REGISTRADA', () {
+      // 1→2 e 2→3 cumpridos, mas 1→3 fecha em 3 meses, abaixo dos 4 mínimos.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 4, 10)),
+        ],
+        dataAtual: DateTime(2026, 9, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('10h. mínimos exatamente cumpridos: REGISTRADA', () {
+      // 10/01 → 10/02 (1 mês) → 10/05 (3 meses depois da 2ª, 4 meses da 1ª).
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+          dose(numero: 3, data: DateTime(2026, 5, 10)),
+        ],
+        dataAtual: DateTime(2026, 9, 1),
+      );
+
+      expect(status.estado, EstadoVacina.registrada);
+    });
+
+    test('11. ordem dos registros na lista não altera o resultado', () {
+      final doses = [
+        dose(numero: 2, data: DateTime(2026, 2, 10)),
+        dose(numero: 1, data: primeiraDose),
+      ];
+      final invertidas = doses.reversed.toList();
+
+      final a = hepatiteEm(historico: doses, dataAtual: DateTime(2026, 7, 10));
+      final b = hepatiteEm(historico: invertidas, dataAtual: DateTime(2026, 7, 10));
+
+      expect(a.estado, b.estado);
+      expect(a.motivo, b.motivo);
+    });
+
+    test('12. posição de dose repetida: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 2, data: primeiraDose),
+          dose(numero: 2, data: DateTime(2026, 2, 10)),
+        ],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, contains('repetidas'));
+    });
+
+    test('13. posição fora de 1..3: VERIFICAR_HISTORICO', () {
+      for (final numero in [0, 4, 99, -1]) {
+        final status = hepatiteEm(
+          historico: [dose(numero: numero, data: primeiraDose)],
+          dataAtual: DateTime(2026, 6, 1),
+        );
+
+        expect(status.estado, EstadoVacina.verificarHistorico, reason: '$numero');
       }
+    });
+
+    test('14. situação desconhecida: VERIFICAR_HISTORICO', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(
+            numero: 2,
+            data: DateTime(2026, 2, 10),
+            situacao: SituacaoInformada.situacaoDesconhecida,
+          ),
+        ],
+        dataAtual: DateTime(2026, 7, 10),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+    });
+
+    test('15. naoAplicadaInformado não conta como dose', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(
+            numero: 1,
+            data: null,
+            situacao: SituacaoInformada.naoAplicadaInformado,
+          ),
+        ],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      // Sem nenhuma dose aplicada, o esquema segue indeterminado.
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, contains('sem dose registrada'));
+    });
+
+    test('16. dose sem DUM participa do histórico', () {
+      final status = hepatiteEm(
+        historico: [dose(numero: 1, data: primeiraDose)],
+        dataAtual: DateTime(2026, 2, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.estado, isNot(EstadoVacina.verificarHistorico));
+    });
+
+    test('17. dose de outra gestação participa do histórico', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(
+            numero: 1,
+            data: primeiraDose,
+            dumNoRegistro: DateTime(2020, 3, 10),
+          ),
+        ],
+        dataAtual: DateTime(2026, 2, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+    });
+
+    test('18. nova gestação não reinicia o esquema', () {
+      // Duas doses aplicadas sob outra DUM continuam contando: a próxima é
+      // a 3ª, não a 1ª.
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose, dumNoRegistro: DateTime(2020, 3, 10)),
+          dose(
+            numero: 2,
+            data: DateTime(2026, 2, 10),
+            dumNoRegistro: DateTime(2020, 3, 10),
+          ),
+        ],
+        dataAtual: DateTime(2026, 7, 10),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.motivo, contains('dose 3'));
+    });
+
+    test('19. dose com data futura mantém o esquema em espera', () {
+      final status = hepatiteEm(
+        historico: [dose(numero: 1, data: DateTime(2027, 1, 1))],
+        dataAtual: DateTime(2026, 6, 1),
+      );
+
+      expect(status.estado, EstadoVacina.aguardarIntervalo);
+      expect(status.estado, isNot(EstadoVacina.periodoRecomendado));
+    });
+
+    test('20. virada de mês e ano bissexto na aritmética dos intervalos', () {
+      // 31/01 + 1 mês = 28/02 (2026 não é bissexto).
+      expect(
+        hepatiteEm(
+          historico: [dose(numero: 1, data: DateTime(2026, 1, 31))],
+          dataAtual: DateTime(2026, 2, 27),
+        ).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+      expect(
+        hepatiteEm(
+          historico: [dose(numero: 1, data: DateTime(2026, 1, 31))],
+          dataAtual: DateTime(2026, 2, 28),
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+
+      // 31/01/2028 + 1 mês = 29/02/2028 (bissexto).
+      expect(
+        hepatiteEm(
+          historico: [dose(numero: 1, data: DateTime(2028, 1, 31))],
+          dataAtual: DateTime(2028, 2, 28),
+        ).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+      expect(
+        hepatiteEm(
+          historico: [dose(numero: 1, data: DateTime(2028, 1, 31))],
+          dataAtual: DateTime(2028, 2, 29),
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('21 e 22. mínimo 2→3 exatamente atingido e um dia antes', () {
+      final historico = [
+        dose(numero: 1, data: DateTime(2025, 1, 10)),
+        dose(numero: 2, data: DateTime(2026, 2, 10)),
+      ];
+
+      // 1→3 mínimo (4 meses de 10/01/2025) e recomendado (6 meses) já
+      // cumpridos: quem manda é o mínimo 2→3, que completa em 10/04/2026.
+      expect(
+        hepatiteEm(historico: historico, dataAtual: DateTime(2026, 4, 9)).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+      expect(
+        hepatiteEm(historico: historico, dataAtual: DateTime(2026, 4, 10)).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('23 e 24. recomendado 1→2 exatamente atingido e um dia antes', () {
+      final historico = [dose(numero: 1, data: primeiraDose)];
+
+      expect(
+        hepatiteEm(historico: historico, dataAtual: DateTime(2026, 2, 9)).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+      expect(
+        hepatiteEm(historico: historico, dataAtual: DateTime(2026, 2, 10)).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('25. doses de outra vacina não interferem', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose, codigo: codigoDtpa),
+          dose(numero: 2, data: DateTime(2026, 2, 10), codigo: codigoCovid19),
+        ],
+        dataAtual: DateTime(2026, 7, 10),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, contains('sem dose registrada'));
+    });
+
+    test('26. determinismo campo a campo', () {
+      final historico = [
+        dose(numero: 1, data: primeiraDose),
+        dose(numero: 2, data: DateTime(2026, 2, 10)),
+      ];
+      final data = DateTime(2026, 5, 10);
+
+      final a = hepatiteEm(historico: historico, dataAtual: data);
+      final b = hepatiteEm(historico: historico, dataAtual: data);
+
+      expect(a.estado, b.estado);
+      expect(a.mensagem, b.mensagem);
+      expect(a.nivelAtencao, b.nivelAtencao);
+      expect(a.podeRegistrar, b.podeRegistrar);
+      expect(a.motivo, b.motivo);
+      expect(a.proximaJanela, b.proximaJanela);
+    });
+
+    test('a hepatite B não depende da idade gestacional', () {
+      final historico = [dose(numero: 1, data: primeiraDose)];
+
+      for (final dias in [0, 140, 200, 294, -30, 400]) {
+        final status = statusDe(
+          avaliarEm(
+            diasGestacaoBruto: dias,
+            historico: historico,
+            dataAtual: DateTime(2026, 2, 10),
+          ),
+          codigoHepatiteB,
+        );
+
+        expect(status.estado, EstadoVacina.periodoRecomendado, reason: '$dias dias');
+      }
+    });
+
+    test('dose 2 ausente com dose 1 e 3 registradas avalia a dose 2', () {
+      final status = hepatiteEm(
+        historico: [
+          dose(numero: 1, data: primeiraDose),
+          dose(numero: 3, data: DateTime(2026, 7, 10)),
+        ],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.motivo, contains('dose 2'));
+    });
+
+    test('dose de referência ausente leva a VERIFICAR_HISTORICO', () {
+      // Só a dose 2: a próxima ausente é a 1, que não tem intervalo
+      // declarado que leve até ela.
+      final status = hepatiteEm(
+        historico: [dose(numero: 2, data: DateTime(2026, 2, 10))],
+        dataAtual: DateTime(2026, 8, 1),
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+    });
+  });
+
+  group('Hepatite B — parâmetros vêm da regra', () {
+    const codigoFicticio = 'ESQUEMA_DE_TESTE';
+
+    StatusVacinacao avaliarCom({
+      required int dosesDoEsquema,
+      required List<IntervaloEntreDoses> intervalos,
+      required List<int> numerosRegistrados,
+      required DateTime dataAtual,
+    }) {
+      return VacinasEngine.avaliar(
+        diasGestacaoBruto: 200,
+        dum: dum,
+        dataAtual: dataAtual,
+        historico: [
+          for (final numero in numerosRegistrados)
+            RegistroVacinacao(
+              vacinaCodigo: codigoFicticio,
+              situacaoInformada: SituacaoInformada.aplicadaComData,
+              versaoCalendario: versaoCalendarioPni2026,
+              numeroDaDose: numero,
+              dataAplicacao: DateTime(2026, numero, 10),
+            ),
+        ],
+        calendario: [
+          RegraDependeHistorico(
+            codigo: codigoFicticio,
+            nomeExibicao: 'Esquema de teste',
+            versaoCalendario: versaoCalendarioPni2026,
+            dosesDoEsquemaBasico: dosesDoEsquema,
+            reiniciaEsquemaIniciado: false,
+            intervalosEntreDoses: intervalos,
+          ),
+        ],
+      ).single;
+    }
+
+    test('esquema de 2 doses encerra com 2 doses, não com 3', () {
+      expect(
+        avaliarCom(
+          dosesDoEsquema: 2,
+          intervalos: const [
+            IntervaloEntreDoses(
+              doseInicial: 1,
+              doseFinal: 2,
+              recomendado: Intervalo.meses(1),
+            ),
+          ],
+          numerosRegistrados: [1, 2],
+          dataAtual: DateTime(2026, 6, 1),
+        ).estado,
+        EstadoVacina.registrada,
+      );
+    });
+
+    test('esquema de 4 doses não encerra com 3', () {
+      expect(
+        avaliarCom(
+          dosesDoEsquema: 4,
+          intervalos: const [
+            IntervaloEntreDoses(
+              doseInicial: 1,
+              doseFinal: 4,
+              recomendado: Intervalo.meses(1),
+            ),
+          ],
+          numerosRegistrados: [1, 2, 3],
+          dataAtual: DateTime(2026, 6, 1),
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('o intervalo declarado é respeitado, sem número fixo', () {
+      final intervalos = [
+        const IntervaloEntreDoses(
+          doseInicial: 1,
+          doseFinal: 2,
+          recomendado: Intervalo.meses(9),
+        ),
+      ];
+
+      expect(
+        avaliarCom(
+          dosesDoEsquema: 2,
+          intervalos: intervalos,
+          numerosRegistrados: [1],
+          dataAtual: DateTime(2026, 10, 9),
+        ).estado,
+        EstadoVacina.aguardarIntervalo,
+      );
+      expect(
+        avaliarCom(
+          dosesDoEsquema: 2,
+          intervalos: intervalos,
+          numerosRegistrados: [1],
+          dataAtual: DateTime(2026, 10, 10),
+        ).estado,
+        EstadoVacina.periodoRecomendado,
+      );
+    });
+
+    test('sem intervalo declarado para a próxima dose: VERIFICAR_HISTORICO', () {
+      expect(
+        avaliarCom(
+          dosesDoEsquema: 3,
+          intervalos: const [],
+          numerosRegistrados: [1],
+          dataAtual: DateTime(2026, 6, 1),
+        ).estado,
+        EstadoVacina.verificarHistorico,
+      );
+    });
+  });
+
+  group('dT — avaliação por intervalo desde a última dose ainda não implementada', () {
+    test('permanece em VERIFICAR_HISTORICO mesmo com esquema completo', () {
+      final resultado = avaliarEm(
+        diasGestacaoBruto: 200,
+        historico: [
+          for (var n = 1; n <= 3; n++)
+            RegistroVacinacao(
+              vacinaCodigo: codigoDt,
+              situacaoInformada: SituacaoInformada.aplicadaComData,
+              versaoCalendario: versaoCalendarioPni2026,
+              numeroDaDose: n,
+              dataAplicacao: DateTime(2020, n, 10),
+            ),
+        ],
+      );
+
+      final dt = statusDe(resultado, codigoDt);
+      expect(dt.estado, EstadoVacina.verificarHistorico);
+      expect(dt.estado, isNot(EstadoVacina.registrada));
     });
   });
 

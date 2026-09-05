@@ -128,7 +128,6 @@ final class RegraJanelaSemana extends RegraCalendario {
   bool get parametrosCompletos => dosesPorGestacao != null;
 }
 
-/// vindo de outra vacina.
 final class RegraDependeHistorico extends RegraCalendario {
   final int dosesDoEsquemaBasico;
 

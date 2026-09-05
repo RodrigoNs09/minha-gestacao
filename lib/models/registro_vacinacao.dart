@@ -40,6 +40,10 @@ class RegistroVacinacao {
 
   final DateTime? dataAplicacao;
 
+  /// Posição declarada da dose no esquema. `null` = posição desconhecida,
+  /// nunca primeira dose. Não é inferida da data nem da ordem dos registros.
+  final int? numeroDaDose;
+
   final SituacaoInformada situacaoInformada;
 
   final OrigemRegistro origemRegistro;
@@ -61,6 +65,7 @@ class RegistroVacinacao {
     required this.versaoCalendario,
     this.origemRegistro = OrigemRegistro.registradoPelaUsuaria,
     this.dataAplicacao,
+    this.numeroDaDose,
     this.dumNoRegistro,
     this.temporadaNoRegistro,
     this.criadoEm,
@@ -75,6 +80,7 @@ class RegistroVacinacao {
       versaoCalendario: versaoCalendario,
       origemRegistro: origemRegistro,
       dataAplicacao: dataAplicacao,
+      numeroDaDose: numeroDaDose,
       dumNoRegistro: dumNoRegistro,
       temporadaNoRegistro: temporadaNoRegistro,
       criadoEm: criadoEm,
@@ -92,6 +98,9 @@ class RegistroVacinacao {
 
     final aplicacao = dataAplicacao;
     if (aplicacao != null) mapa['dataAplicacao'] = _formatarDia(aplicacao);
+
+    final numero = numeroDaDose;
+    if (numero != null) mapa['numeroDaDose'] = numero;
 
     final dum = dumNoRegistro;
     if (dum != null) mapa['dumNoRegistro'] = dum.toIso8601String();
@@ -117,6 +126,7 @@ class RegistroVacinacao {
       origemRegistro: OrigemRegistro.porCodigo(map['origemRegistro']),
       versaoCalendario: _texto(map['versaoCalendario']) ?? '',
       dataAplicacao: _parsearData(map['dataAplicacao']),
+      numeroDaDose: _inteiro(map['numeroDaDose']),
       dumNoRegistro: _parsearData(map['dumNoRegistro']),
       temporadaNoRegistro: _texto(map['temporadaNoRegistro']),
       criadoEm: _parsearData(map['criadoEm']),
@@ -148,4 +158,6 @@ class RegistroVacinacao {
   }
 
   static String? _texto(Object? bruto) => bruto is String ? bruto : null;
+
+  static int? _inteiro(Object? bruto) => bruto is int ? bruto : null;
 }

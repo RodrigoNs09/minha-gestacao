@@ -227,15 +227,205 @@ class VacinasEngine {
         );
 
       case RegraDependeHistorico():
-        return StatusVacinacao(
+        return _avaliarDependeHistorico(
+          regra: regra,
+          dataAtual: dataAtual,
+          historico: historico,
+        );
+    }
+  }
+
+  static StatusVacinacao _avaliarDependeHistorico({
+    required RegraDependeHistorico regra,
+    required DateTime dataAtual,
+    required List<RegistroVacinacao> historico,
+  }) {
+    StatusVacinacao verificar(String motivo) => StatusVacinacao(
           vacinaCodigo: regra.codigo,
           estado: EstadoVacina.verificarHistorico,
           mensagem: mensagemVerificarHistorico,
           nivelAtencao: nivelDoEstado(EstadoVacina.verificarHistorico),
           podeRegistrar: true,
-          motivo: 'avaliação condicional ainda não implementada nesta versão',
+          motivo: motivo,
         );
+
+    if (regra.dosesDoEsquemaBasico <= 0) {
+      return verificar('regra sem doses de esquema básico declaradas');
     }
+
+    // O mecanismo de intervalo desde a última dose com determinados
+    // componentes é de outra etapa; regras que o declaram não são avaliadas
+    // por este caminho.
+    if (regra.intervaloRecomendadoDesdeUltimaDose != null) {
+      return verificar('avaliação por intervalo desde a última dose ainda não '
+          'implementada nesta versão');
+    }
+
+    final relevantes = historico
+        .where((r) => r.vacinaCodigo == regra.codigo)
+        .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
+        .toList(growable: false);
+
+    if (relevantes.any(_temSituacaoIndeterminada)) {
+      return verificar('há registro desta vacina sem situação determinada');
+    }
+
+    final aplicadas = relevantes.where(_declaraDoseAplicada).toList(growable: false);
+
+    if (aplicadas.isEmpty) {
+      // Esquema de vida: sem registro não se conclui que a usuária nunca
+      // recebeu as doses, então também não se afirma que deve iniciar.
+      return verificar('sem dose registrada para determinar o esquema');
+    }
+
+    if (aplicadas.any((r) => r.numeroDaDose == null)) {
+      return verificar('há dose declarada sem posição no esquema');
+    }
+
+    final numeros = aplicadas.map((r) => r.numeroDaDose!).toList(growable: false);
+
+    if (numeros.any((n) => n < 1 || n > regra.dosesDoEsquemaBasico)) {
+      return verificar('há dose com posição fora de 1..${regra.dosesDoEsquemaBasico}');
+    }
+
+    if (numeros.toSet().length != numeros.length) {
+      return verificar('há posições de dose repetidas no esquema');
+    }
+
+    final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
+
+    // Consistência dos dados, não regra do calendário: uma dose de posição
+    // maior tem de ser posterior às anteriores. Datas iguais também são
+    // inconsistentes, e a posição segue vindo só de numeroDaDose.
+    final ordenados = numeros.toList()..sort();
+    for (var a = 0; a < ordenados.length - 1; a++) {
+      for (var b = a + 1; b < ordenados.length; b++) {
+        final anterior = porNumero[ordenados[a]]!.dataAplicacao;
+        final posterior = porNumero[ordenados[b]]!.dataAplicacao;
+        if (anterior == null || posterior == null) continue;
+
+        if (!_soData(posterior).isAfter(_soData(anterior))) {
+          return verificar('dose ${ordenados[b]} não é posterior à dose '
+              '${ordenados[a]}');
+        }
+      }
+    }
+
+    if (numeros.length >= regra.dosesDoEsquemaBasico) {
+      // Ter as posições preenchidas não basta: o esquema só é dado como
+      // registrado se as datas respeitarem os intervalos mínimos declarados.
+      for (final intervalo in regra.intervalosEntreDoses) {
+        final inicial = porNumero[intervalo.doseInicial];
+        final ultima = porNumero[intervalo.doseFinal];
+        if (inicial == null || ultima == null) continue;
+
+        final dataInicial = inicial.dataAplicacao;
+        final dataUltima = ultima.dataAplicacao;
+        if (dataInicial == null || dataUltima == null) {
+          return verificar('dose sem data: intervalo entre as doses '
+              '${intervalo.doseInicial} e ${intervalo.doseFinal} não verificável');
+        }
+
+        final minimo = intervalo.minimo;
+        if (minimo == null) continue;
+
+        if (!_naoPosteriorA(_somarIntervalo(dataInicial, minimo), dataUltima)) {
+          return verificar('intervalo mínimo de $minimo entre as doses '
+              '${intervalo.doseInicial} e ${intervalo.doseFinal} não cumprido');
+        }
+      }
+
+      return StatusVacinacao(
+        vacinaCodigo: regra.codigo,
+        estado: EstadoVacina.registrada,
+        mensagem: mensagemDoseRegistrada,
+        nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
+        podeRegistrar: false,
+        motivo: 'esquema de ${regra.dosesDoEsquemaBasico} doses registrado pela '
+            'usuária',
+      );
+    }
+
+    var proxima = regra.dosesDoEsquemaBasico;
+    for (var n = 1; n <= regra.dosesDoEsquemaBasico; n++) {
+      if (!porNumero.containsKey(n)) {
+        proxima = n;
+        break;
+      }
+    }
+
+    final intervalos = regra.intervalosEntreDoses
+        .where((i) => i.doseFinal == proxima)
+        .toList(growable: false);
+
+    if (intervalos.isEmpty) {
+      return verificar('sem intervalo declarado para a dose $proxima');
+    }
+
+    for (final intervalo in intervalos) {
+      final referencia = porNumero[intervalo.doseInicial];
+      if (referencia == null) {
+        return verificar('falta a dose ${intervalo.doseInicial}, exigida para '
+            'avaliar a dose $proxima');
+      }
+      if (referencia.dataAplicacao == null) {
+        return verificar('dose ${intervalo.doseInicial} sem data: intervalo até '
+            'a dose $proxima não verificável');
+      }
+    }
+
+    // Mínimo antes do recomendado: os dois levam a AGUARDAR_INTERVALO, e o
+    // motivo distingue quem já cumpriu o mínimo.
+    for (final intervalo in intervalos) {
+      final minimo = intervalo.minimo;
+      if (minimo == null) continue;
+
+      final referencia = porNumero[intervalo.doseInicial]!.dataAplicacao!;
+      final liberacao = _somarIntervalo(referencia, minimo);
+
+      if (!_naoPosteriorA(liberacao, dataAtual)) {
+        return StatusVacinacao(
+          vacinaCodigo: regra.codigo,
+          estado: EstadoVacina.aguardarIntervalo,
+          mensagem: mensagemAguardarIntervalo,
+          nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
+          podeRegistrar: true,
+          motivo: 'dose $proxima: intervalo mínimo de $minimo desde a dose '
+              '${intervalo.doseInicial} completa em ${_soData(liberacao)}',
+        );
+      }
+    }
+
+    for (final intervalo in intervalos) {
+      final recomendado = intervalo.recomendado;
+      if (recomendado == null) continue;
+
+      final referencia = porNumero[intervalo.doseInicial]!.dataAplicacao!;
+      final liberacao = _somarIntervalo(referencia, recomendado);
+
+      if (!_naoPosteriorA(liberacao, dataAtual)) {
+        return StatusVacinacao(
+          vacinaCodigo: regra.codigo,
+          estado: EstadoVacina.aguardarIntervalo,
+          mensagem: mensagemAguardarIntervalo,
+          nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
+          podeRegistrar: true,
+          motivo: 'dose $proxima: intervalo mínimo cumprido, recomendado de '
+              '$recomendado desde a dose ${intervalo.doseInicial} completa em '
+              '${_soData(liberacao)}',
+        );
+      }
+    }
+
+    return StatusVacinacao(
+      vacinaCodigo: regra.codigo,
+      estado: EstadoVacina.periodoRecomendado,
+      mensagem: mensagemPeriodoRecomendado,
+      nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
+      podeRegistrar: true,
+      motivo: 'dose $proxima de ${regra.dosesDoEsquemaBasico}: intervalos '
+          'recomendados cumpridos',
+    );
   }
 
   static StatusVacinacao _avaliarTemporada({

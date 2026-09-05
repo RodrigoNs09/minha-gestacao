@@ -506,6 +506,165 @@ void main() {
     });
   });
 
+  group('numeroDaDose', () {
+    RegistroVacinacao comNumero(int? numero) {
+      return RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        numeroDaDose: numero,
+      );
+    }
+
+    test('números 1, 2 e 3 sobrevivem à ida e volta', () {
+      for (final numero in [1, 2, 3]) {
+        expect(comNumero(numero).toMap()['numeroDaDose'], numero);
+        expect(
+          RegistroVacinacao.fromMap(comNumero(numero).toMap()).numeroDaDose,
+          numero,
+        );
+      }
+    });
+
+    test('campo ausente resulta em null', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'hepatite_b',
+      });
+
+      expect(registro.numeroDaDose, isNull);
+    });
+
+    test('campo explicitamente null resulta em null', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'hepatite_b',
+        'numeroDaDose': null,
+      });
+
+      expect(registro.numeroDaDose, isNull);
+    });
+
+    test('tipo inválido resulta em null', () {
+      for (final invalido in <Object>['2', 2.0, true, [2]]) {
+        final registro = RegistroVacinacao.fromMap({
+          'vacinaCodigo': 'hepatite_b',
+          'numeroDaDose': invalido,
+        });
+
+        expect(registro.numeroDaDose, isNull, reason: '$invalido');
+      }
+    });
+
+    test('número nulo é omitido do mapa', () {
+      final mapa = comNumero(null).toMap();
+
+      expect(mapa.containsKey('numeroDaDose'), isFalse);
+      expect(mapa.values, isNot(contains(null)));
+    });
+
+    test('null permanece null na ida e volta', () {
+      expect(
+        RegistroVacinacao.fromMap(comNumero(null).toMap()).numeroDaDose,
+        isNull,
+      );
+    });
+
+    test('o modelo não valida a faixa do número', () {
+      for (final numero in [0, 4, 99, -1]) {
+        expect(
+          RegistroVacinacao.fromMap(comNumero(numero).toMap()).numeroDaDose,
+          numero,
+        );
+      }
+    });
+
+    test('é independente da data de aplicação', () {
+      final semData = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaDataDesconhecida,
+        versaoCalendario: 'PNI-2026',
+        numeroDaDose: 3,
+      );
+      final comDataAntiga = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        dataAplicacao: DateTime(2010, 1, 1),
+        numeroDaDose: 3,
+      );
+
+      expect(RegistroVacinacao.fromMap(semData.toMap()).numeroDaDose, 3);
+      expect(RegistroVacinacao.fromMap(comDataAntiga.toMap()).numeroDaDose, 3);
+      expect(RegistroVacinacao.fromMap(semData.toMap()).dataAplicacao, isNull);
+    });
+
+    test('data presente não gera número de dose', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'hepatite_b',
+        'dataAplicacao': '2026-04-15',
+      });
+
+      expect(registro.dataAplicacao, DateTime(2026, 4, 15));
+      expect(registro.numeroDaDose, isNull);
+    });
+
+    test('é independente do vínculo com a gestação', () {
+      final semDum = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        numeroDaDose: 2,
+      );
+      final comDum = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        dumNoRegistro: DateTime(2026, 1, 5),
+        numeroDaDose: 2,
+      );
+
+      expect(RegistroVacinacao.fromMap(semDum.toMap()).numeroDaDose, 2);
+      expect(RegistroVacinacao.fromMap(comDum.toMap()).numeroDaDose, 2);
+      expect(RegistroVacinacao.fromMap(semDum.toMap()).dumNoRegistro, isNull);
+    });
+
+    test('dum presente não gera número de dose', () {
+      final registro = RegistroVacinacao.fromMap({
+        'vacinaCodigo': 'hepatite_b',
+        'dumNoRegistro': DateTime(2026, 1, 5).toIso8601String(),
+      });
+
+      expect(registro.dumNoRegistro, DateTime(2026, 1, 5));
+      expect(registro.numeroDaDose, isNull);
+    });
+
+    test('round-trip completo preserva número e demais campos', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        dataAplicacao: DateTime(2026, 4, 15),
+        numeroDaDose: 2,
+        dumNoRegistro: DateTime(2026, 1, 5),
+        temporadaNoRegistro: '2026',
+        criadoEm: DateTime(2026, 4, 15, 9, 30),
+        observacao: 'segunda dose',
+      );
+
+      final lido = RegistroVacinacao.fromMap(original.toMap());
+
+      expect(lido.numeroDaDose, 2);
+      expect(lido.vacinaCodigo, original.vacinaCodigo);
+      expect(lido.situacaoInformada, original.situacaoInformada);
+      expect(lido.origemRegistro, original.origemRegistro);
+      expect(lido.versaoCalendario, original.versaoCalendario);
+      expect(lido.dataAplicacao, original.dataAplicacao);
+      expect(lido.dumNoRegistro, original.dumNoRegistro);
+      expect(lido.temporadaNoRegistro, original.temporadaNoRegistro);
+      expect(lido.criadoEm, original.criadoEm);
+      expect(lido.observacao, original.observacao);
+    });
+  });
+
   group('RegistroVacinacao.comId', () {
     test('anexa o id sem alterar os demais campos', () {
       final original = registroCompleto();
@@ -541,6 +700,27 @@ void main() {
       );
 
       expect(original.comId('doc-9').temporadaNoRegistro, isNull);
+    });
+
+    test('preserva o número da dose', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        numeroDaDose: 2,
+      );
+
+      expect(original.comId('doc-9').numeroDaDose, 2);
+    });
+
+    test('preserva número de dose ausente como ausente', () {
+      final original = RegistroVacinacao(
+        vacinaCodigo: 'hepatite_b',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+      );
+
+      expect(original.comId('doc-9').numeroDaDose, isNull);
     });
 
     test('substitui um id já existente', () {
