@@ -104,15 +104,41 @@ class _VacinasScreenState extends State<VacinasScreen> {
       situacao == SituacaoInformada.aplicadaComData ||
       situacao == SituacaoInformada.aplicadaDataDesconhecida;
 
-  Future<void> _abrirCadastro(BuildContext context, String vacinaCodigo) async {
+  List<RegistroVacinacao> _registrosDaVacina(String codigo) {
+    final historico = _historico;
+    if (historico == null) return const [];
+
+    return historico
+        .where((r) => r.vacinaCodigo == codigo && r.id != null)
+        .toList(growable: false);
+  }
+
+  String _resumoDoRegistro(RegistroVacinacao registro) {
+    final partes = <String>[_rotuloDaSituacao(registro.situacaoInformada)];
+
+    final data = registro.dataAplicacao;
+    if (data != null) partes.add(_formatarData(data));
+
+    final numero = registro.numeroDaDose;
+    if (numero != null) partes.add('dose $numero');
+
+    return partes.join(' · ');
+  }
+
+  Future<void> _abrirFormulario(
+    BuildContext context,
+    String vacinaCodigo, {
+    RegistroVacinacao? edicaoDe,
+  }) async {
     final pedeNumeroDaDose =
         regraPorCodigo(vacinaCodigo) is RegraDependeHistorico;
 
-    _idPendente = VacinasStorage.novoId();
+    // Edição escreve no documento que já existe; só um cadastro novo gera id.
+    _idPendente = edicaoDe?.id ?? VacinasStorage.novoId();
 
-    SituacaoInformada? situacao;
-    DateTime? dataAplicacao;
-    int? numeroDaDose;
+    SituacaoInformada? situacao = edicaoDe?.situacaoInformada;
+    DateTime? dataAplicacao = edicaoDe?.dataAplicacao;
+    int? numeroDaDose = edicaoDe?.numeroDaDose;
     bool salvando = false;
     String? erroDoSalvamento;
 
@@ -155,19 +181,25 @@ class _VacinasScreenState extends State<VacinasScreen> {
                 erroDoSalvamento = null;
               });
 
+              // Numa edição só situação, data e dose mudam: o resto é o
+              // histórico do registro e é preservado como estava.
               final registro = RegistroVacinacao(
                 id: _idPendente,
                 vacinaCodigo: vacinaCodigo,
                 situacaoInformada: situacao!,
-                versaoCalendario: versaoCalendarioPni2026,
-                origemRegistro: OrigemRegistro.registradoPelaUsuaria,
+                versaoCalendario:
+                    edicaoDe?.versaoCalendario ?? versaoCalendarioPni2026,
+                origemRegistro:
+                    edicaoDe?.origemRegistro ??
+                    OrigemRegistro.registradoPelaUsuaria,
                 dataAplicacao: situacao == SituacaoInformada.aplicadaComData
                     ? dataAplicacao
                     : null,
                 numeroDaDose: mostraNumero ? numeroDaDose : null,
-                dumNoRegistro: gestacaoAtual.dum,
-                temporadaNoRegistro: null,
-                criadoEm: DateTime.now(),
+                dumNoRegistro: edicaoDe?.dumNoRegistro ?? gestacaoAtual.dum,
+                temporadaNoRegistro: edicaoDe?.temporadaNoRegistro,
+                criadoEm: edicaoDe?.criadoEm ?? DateTime.now(),
+                observacao: edicaoDe?.observacao,
               );
 
               RegistroVacinacao? gravado;
@@ -213,7 +245,9 @@ class _VacinasScreenState extends State<VacinasScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Registrar vacinação',
+                      edicaoDe == null
+                          ? 'Registrar vacinação'
+                          : 'Editar registro',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -509,7 +543,15 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
     setState(() {
       if (salvo != null) {
-        _historico = [...?_historico, salvo];
+        final lista = [...?_historico];
+        final indice = lista.indexWhere((r) => r.id == salvo.id);
+        // Mesmo id: substitui no lugar. Id novo: entra no fim da lista.
+        if (indice >= 0) {
+          lista[indice] = salvo;
+        } else {
+          lista.add(salvo);
+        }
+        _historico = lista;
         _abrirNovaAvaliacao();
       }
       _idPendente = null;
@@ -519,6 +561,8 @@ class _VacinasScreenState extends State<VacinasScreen> {
   Widget _cardVacina(BuildContext context, StatusVacinacao status) {
     final apresentacao = apresentacaoDe(status.estado);
     final janela = status.proximaJanela;
+    // A associação é pelo código da vacina do próprio card.
+    final registros = _registrosDaVacina(status.vacinaCodigo);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -616,11 +660,55 @@ class _VacinasScreenState extends State<VacinasScreen> {
                   ),
                 ],
 
+                if (registros.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ...registros.map(
+                    (registro) => Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _resumoDoRegistro(registro),
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: AppColors.textSecondary(context),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => _abrirFormulario(
+                              context,
+                              registro.vacinaCodigo,
+                              edicaoDe: registro,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                'Editar',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.purpleLabel(context),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 if (status.podeRegistrar) ...[
                   const SizedBox(height: 8),
                   InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    onTap: () => _abrirCadastro(context, status.vacinaCodigo),
+                    onTap: () => _abrirFormulario(context, status.vacinaCodigo),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,

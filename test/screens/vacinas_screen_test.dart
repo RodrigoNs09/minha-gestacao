@@ -68,6 +68,8 @@ void main() {
 
       expect(find.text('Registrar'), findsNothing);
       expect(find.text('Registrar vacinação'), findsNothing);
+      expect(find.text('Editar'), findsNothing);
+      expect(find.text('Editar registro'), findsNothing);
     });
 
     testWidgets('o cabeçalho continua visível no estado de erro', (tester) async {
@@ -124,15 +126,16 @@ void main() {
 
       // Duas chamadas: uma ao carregar, outra depois de gravar com sucesso.
       expect('_abrirNovaAvaliacao();'.allMatches(codigo), hasLength(2));
-      expect(codigo, contains('_historico = registros;\n        _abrirNovaAvaliacao();'));
+      expect(
+        codigo,
+        contains('_historico = registros;\n        _abrirNovaAvaliacao();'),
+      );
 
-      final atualiza = codigo.indexOf('_historico = [...?_historico, salvo];');
-      final renova = codigo.indexOf('_abrirNovaAvaliacao();', atualiza);
-
-      expect(atualiza, greaterThan(-1));
-      expect(renova, greaterThan(atualiza));
-      // Só se salvou: um cancelamento não abre avaliação nova.
-      expect(codigo.substring(atualiza, renova), isNot(contains('}')));
+      // A renovação fica dentro do if do salvamento; a limpeza do id, fora.
+      expect(
+        fonteNormalizada(),
+        contains('_historico = lista; _abrirNovaAvaliacao(); } _idPendente = null;'),
+      );
     });
 
     test('não alimenta a engine com a semana clampeada de GestacaoInfo', () {
@@ -201,11 +204,13 @@ void main() {
   });
 
   group('VacinasScreen — cadastro', () {
-    test('o cadastro abre em bottom sheet, no padrão do app', () {
+    test('cadastro e edição usam o mesmo bottom sheet', () {
       final codigo = fonte();
 
       expect('showModalBottomSheet'.allMatches(codigo), hasLength(1));
+      expect('Future<void> _abrirFormulario('.allMatches(codigo), hasLength(1));
       expect(codigo, contains('showDatePicker'));
+      expect(codigo, contains('RegistroVacinacao? edicaoDe,'));
     });
 
     test('grava pelo storage e não remove nada nesta etapa', () {
@@ -223,7 +228,8 @@ void main() {
     test('o id pendente é criado ao abrir e só é limpo depois do sheet', () {
       final codigo = fonte();
 
-      final gera = codigo.indexOf('_idPendente = VacinasStorage.novoId();');
+      final gera =
+          codigo.indexOf('_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();');
       final abre = codigo.indexOf('await showModalBottomSheet<RegistroVacinacao>');
       final limpa = codigo.indexOf('_idPendente = null;');
 
@@ -235,16 +241,22 @@ void main() {
       expect(codigo, contains('id: _idPendente'));
     });
 
-    test('o registro leva os campos aprovados e nada além', () {
-      final codigo = fonte();
+    test('um registro novo leva os campos aprovados e nada além', () {
+      final normalizada = fonteNormalizada();
 
-      expect(codigo, contains('vacinaCodigo: vacinaCodigo'));
-      expect(codigo, contains('versaoCalendario: versaoCalendarioPni2026'));
-      expect(codigo, contains('origemRegistro: OrigemRegistro.registradoPelaUsuaria'));
-      expect(codigo, contains('dumNoRegistro: gestacaoAtual.dum'));
-      expect(codigo, contains('temporadaNoRegistro: null'));
-      expect(codigo, contains('criadoEm: DateTime.now()'));
-      expect(codigo, isNot(contains("versaoCalendario: '")));
+      // Num cadastro novo edicaoDe é nulo, então valem os lados direitos.
+      expect(normalizada, contains('vacinaCodigo: vacinaCodigo'));
+      expect(normalizada, contains('?? versaoCalendarioPni2026'));
+      expect(normalizada, contains('?? OrigemRegistro.registradoPelaUsuaria'));
+      expect(normalizada, contains('?? gestacaoAtual.dum'));
+      expect(normalizada, contains('?? DateTime.now()'));
+      // A temporada não tem fallback: registro novo nasce com null.
+      expect(
+        normalizada,
+        contains('temporadaNoRegistro: edicaoDe?.temporadaNoRegistro'),
+      );
+      expect(normalizada, isNot(contains("versaoCalendario: '")));
+      expect(normalizada, isNot(contains('temporadaNoRegistro: DateTime')));
     });
 
     test('o número da dose vem do tipo da regra, sem código fixo', () {
@@ -298,7 +310,7 @@ void main() {
       final codigo = fonte();
 
       final grava = codigo.indexOf('await VacinasStorage.adicionar(registro)');
-      final atualiza = codigo.indexOf('_historico = [...?_historico, salvo]');
+      final atualiza = codigo.indexOf('_historico = lista;');
 
       expect(grava, greaterThan(-1));
       expect(atualiza, greaterThan(grava));
@@ -329,12 +341,144 @@ void main() {
       expect('Navigator.pop(ctx'.allMatches(codigo), hasLength(2));
     });
 
-    test('nesta etapa não há edição', () {
+  });
+
+  group('VacinasScreen — edição', () {
+    test('existe ação de editar, ligada ao registro exibido', () {
       final codigo = fonte();
 
+      expect(codigo, contains("'Editar'"));
+      expect(codigo, contains("'Editar registro'"));
+      expect(
+        fonteNormalizada(),
+        contains(
+          'onTap: () => _abrirFormulario( context, registro.vacinaCodigo, '
+          'edicaoDe: registro, )',
+        ),
+      );
+    });
+
+    test('a associação com o card é pelo código da vacina', () {
+      expect(fonte(), contains('_registrosDaVacina(status.vacinaCodigo)'));
+      expect(
+        corpoDoMetodo('List<RegistroVacinacao> _registrosDaVacina('),
+        contains('r.vacinaCodigo == codigo'),
+      );
+    });
+
+    test('a edição não gera id novo: escreve no id do registro', () {
+      final codigo = fonte();
+
+      expect(
+        codigo,
+        contains('_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();'),
+      );
+      expect('VacinasStorage.novoId()'.allMatches(codigo), hasLength(1));
+      expect(codigo, contains('id: _idPendente'));
       expect(codigo, isNot(contains('.comId(')));
-      expect(codigo, isNot(contains('_abrirEdicao')));
+    });
+
+    test('a edição grava pelo mesmo adicionar, sem excluir nada', () {
+      final codigo = fonte();
+
+      expect('VacinasStorage.adicionar('.allMatches(codigo), hasLength(1));
+      expect(codigo, isNot(contains('VacinasStorage.remover')));
+      expect(codigo, isNot(matches(RegExp(r'\bDismissible'))));
+      expect(codigo, isNot(contains("'Excluir'")));
       expect(codigo, isNot(contains('onLongPress')));
+    });
+
+    test('os campos históricos do registro são preservados', () {
+      final normalizada = fonteNormalizada();
+
+      expect(normalizada, contains('vacinaCodigo: vacinaCodigo'));
+      expect(
+        normalizada,
+        contains(
+          'versaoCalendario: edicaoDe?.versaoCalendario ?? versaoCalendarioPni2026',
+        ),
+      );
+      expect(
+        normalizada,
+        contains(
+          'origemRegistro: edicaoDe?.origemRegistro ?? OrigemRegistro.registradoPelaUsuaria',
+        ),
+      );
+      expect(
+        normalizada,
+        contains('dumNoRegistro: edicaoDe?.dumNoRegistro ?? gestacaoAtual.dum'),
+      );
+      expect(
+        normalizada,
+        contains('temporadaNoRegistro: edicaoDe?.temporadaNoRegistro'),
+      );
+      expect(
+        normalizada,
+        contains('criadoEm: edicaoDe?.criadoEm ?? DateTime.now()'),
+      );
+      expect(normalizada, contains('observacao: edicaoDe?.observacao'));
+    });
+
+    test('o formulário abre com os valores atuais do registro', () {
+      final normalizada = fonteNormalizada();
+
+      expect(
+        normalizada,
+        contains('SituacaoInformada? situacao = edicaoDe?.situacaoInformada;'),
+      );
+      expect(
+        normalizada,
+        contains('DateTime? dataAplicacao = edicaoDe?.dataAplicacao;'),
+      );
+      expect(
+        normalizada,
+        contains('int? numeroDaDose = edicaoDe?.numeroDaDose;'),
+      );
+    });
+
+    test('trocar de situação limpa os campos que deixam de valer', () {
+      final normalizada = fonteNormalizada();
+
+      expect(
+        normalizada,
+        contains(
+          'if (opcao != SituacaoInformada.aplicadaComData) { dataAplicacao = null; }',
+        ),
+      );
+      expect(
+        normalizada,
+        contains('if (!_declaraAplicacao(opcao)) { numeroDaDose = null; }'),
+      );
+      // Segunda barreira na gravação: o que não é exibido não é gravado.
+      expect(
+        normalizada,
+        contains(
+          'dataAplicacao: situacao == SituacaoInformada.aplicadaComData ? dataAplicacao : null',
+        ),
+      );
+      expect(
+        normalizada,
+        contains('numeroDaDose: mostraNumero ? numeroDaDose : null'),
+      );
+    });
+
+    test('a lista substitui pelo mesmo id em vez de duplicar', () {
+      final codigo = fonte();
+
+      expect(codigo, contains('lista.indexWhere((r) => r.id == salvo.id)'));
+      expect(codigo, contains('lista[indice] = salvo;'));
+      expect(codigo, contains('lista.add(salvo);'));
+
+      final grava = codigo.indexOf('await VacinasStorage.adicionar(registro)');
+      final atualiza = codigo.indexOf('lista[indice] = salvo;');
+      expect(atualiza, greaterThan(grava));
+    });
+
+    test('só registros com id podem ser editados', () {
+      expect(
+        corpoDoMetodo('List<RegistroVacinacao> _registrosDaVacina('),
+        contains('r.id != null'),
+      );
     });
   });
 }
