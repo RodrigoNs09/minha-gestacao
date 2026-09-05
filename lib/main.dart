@@ -11,6 +11,7 @@ import 'screens/chutes_screen.dart';
 import 'screens/historico_chutes_screen.dart';
 import 'screens/sintomas_screen.dart';
 import 'screens/agenda_screen.dart';
+import 'screens/vacinas_screen.dart';
 import 'data/contracoes_data.dart';
 import 'data/gestacao_data.dart';
 import 'services/contracoes_storage.dart';
@@ -25,9 +26,6 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Nenhuma chamada ao Firestore/Auth aqui — isso quebra no Flutter Web
-  // se feito antes do runApp. A checagem de onboarding e os dados
-  // são carregados dentro das telas, depois que o app já está rodando.
   runApp(const MinhaGestacaoApp());
 }
 
@@ -223,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String get ultimaDuracao {
     final hoje = _contracoesDeHoje;
     if (hoje.isEmpty) return '—';
-    final ultima = hoje.last; // já ordenado, a última é a mais recente de hoje
+    final ultima = hoje.last;
     return ultima.duracaoFormatada ?? '—';
   }
 
@@ -257,8 +255,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (minutos == 0) return '${horas}h';
     return '${horas}h${minutos}min';
   }
-
-  // ── Widgets auxiliares ──────────────────────────────────────────────
 
   Widget statCard({
     required String valor,
@@ -652,6 +648,15 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.8, color: AppColors.textMuted(context))),
                         ),
                         const SizedBox(height: 10),
+                        menuCard(
+                          context: context,
+                          icon: Icons.vaccines_outlined,
+                          title: 'Vacinas da Gestação',
+                          subtitle: 'Calendário e seus registros',
+                          screen: const VacinasScreen(),
+                          iconBg: AppColors.statPink(context),
+                          iconColor: AppTheme.pink,
+                        ),
                         menuCard(
                           context: context,
                           icon: Icons.description_outlined,
