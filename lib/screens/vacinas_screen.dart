@@ -125,6 +125,147 @@ class _VacinasScreenState extends State<VacinasScreen> {
     return partes.join(' · ');
   }
 
+  Future<void> _excluirRegistro(
+    BuildContext context,
+    RegistroVacinacao registro,
+  ) async {
+    // Sem id não há documento a remover: a ação não segue.
+    final id = registro.id;
+    if (id == null) return;
+
+    bool excluindo = false;
+    String? erroDaExclusao;
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            Future<void> confirmar() async {
+              if (excluindo) return;
+
+              setDialogState(() {
+                excluindo = true;
+                erroDaExclusao = null;
+              });
+
+              bool? removeu;
+              Object? falha;
+              try {
+                removeu = await VacinasStorage.remover(id);
+              } catch (erro) {
+                falha = erro;
+              }
+
+              if (!ctx.mounted) return;
+
+              if (removeu == true) {
+                Navigator.pop(ctx, true);
+                return;
+              }
+
+              // Falha ou recusa: nada sai da lista e o diálogo continua
+              // aberto para uma nova tentativa.
+              setDialogState(() {
+                excluindo = false;
+                erroDaExclusao = falha != null
+                    ? FirestoreErro.mensagemAmigavel(falha)
+                    : 'Não foi possível excluir: sessão expirada. Entre novamente.';
+              });
+            }
+
+            return PopScope(
+              canPop: !excluindo,
+              child: AlertDialog(
+                backgroundColor: AppColors.surface(ctx),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Text(
+                  'Excluir registro?',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary(ctx),
+                  ),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Esse registro será removido do seu histórico de '
+                      'vacinação.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.textSecondary(ctx),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _resumoDoRegistro(registro),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted(ctx),
+                      ),
+                    ),
+                    if (erroDaExclusao != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        erroDaExclusao!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AppColors.textSecondary(ctx),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: excluindo
+                        ? null
+                        : () => Navigator.pop(ctx, false),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(color: AppColors.textPrimary(ctx)),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: excluindo ? null : confirmar,
+                    child: excluindo
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            'Excluir',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.pink,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || confirmado != true) return;
+
+    setState(() {
+      // Só o documento confirmado pelo storage sai da lista.
+      _historico = [...?_historico]..removeWhere((r) => r.id == id);
+      _abrirNovaAvaliacao();
+    });
+  }
+
   Future<void> _abrirFormulario(
     BuildContext context,
     String vacinaCodigo, {
@@ -164,6 +305,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
                 initialDate: dataAplicacao ?? hoje,
                 firstDate: DateTime(hoje.year - 60),
                 lastDate: hoje,
+                locale: const Locale('pt', 'BR'),
                 helpText: 'Data da aplicação',
                 cancelText: 'Cancelar',
                 confirmText: 'OK',
@@ -696,6 +838,23 @@ class _VacinasScreenState extends State<VacinasScreen> {
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.purpleLabel(context),
                                 ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => _excluirRegistro(context, registro),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
+                              child: Icon(
+                                Icons.delete_outline_rounded,
+                                size: 15,
+                                color: AppColors.textMuted(context),
+                                semanticLabel: 'Excluir',
                               ),
                             ),
                           ),
