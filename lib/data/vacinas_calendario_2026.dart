@@ -2,6 +2,11 @@ library;
 
 const String versaoCalendarioPni2026 = 'PNI-2026';
 
+// Temporada de influenza que esta versão do calendário avalia. Identificador
+// opaco: não é data, não é intervalo e não se deriva do relógio. Uma nova
+// temporada é uma nova versão do calendário.
+const String temporadaInfluenzaPni2026 = '2026';
+
 const String mensagemPeriodoRecomendado =
     'Você entrou no período recomendado para esta vacina. Confirme a '
     'indicação e a aplicação com a equipe de saúde.';

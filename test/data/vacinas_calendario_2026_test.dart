@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/data/vacinas_calendario_2026.dart';
 
@@ -232,6 +234,42 @@ void main() {
 
       expect(influenza.dosesPorTemporada, 1);
       expect(influenza.dosesPorGestacao, isNull);
+    });
+
+    test('a versão declara explicitamente a temporada de influenza', () {
+      expect(temporadaInfluenzaPni2026, '2026');
+      expect(temporadaInfluenzaPni2026, isNotEmpty);
+    });
+
+    test('a temporada é um identificador opaco, não uma data', () {
+      // Nada de derivar temporada de relógio ou de intervalo: o valor é
+      // constante da versão do calendário.
+      expect(DateTime.tryParse(temporadaInfluenzaPni2026), isNull);
+      expect(temporadaInfluenzaPni2026, isNot(contains('-')));
+      expect(temporadaInfluenzaPni2026, isNot(contains('/')));
+    });
+
+    test('a temporada não deriva de DateTime.now() no código-fonte', () {
+      final codigo = File('lib/data/vacinas_calendario_2026.dart')
+          .readAsLinesSync()
+          .where((linha) => !linha.trimLeft().startsWith('//'))
+          .join('\n');
+
+      expect(codigo, isNot(contains('DateTime')));
+      expect(codigo, isNot(contains('.year')));
+      expect(
+        codigo,
+        contains("const String temporadaInfluenzaPni2026 = '2026';"),
+      );
+    });
+
+    test('temporada e versão do calendário são identificadores distintos', () {
+      expect(temporadaInfluenzaPni2026, isNot(versaoCalendarioPni2026));
+
+      final influenza = regraPorCodigo(codigoInfluenza) as RegraDependeTemporada;
+      expect(influenza.versaoCalendario, versaoCalendarioPni2026);
+      // A regra não carrega a temporada: ela é da versão, não da vacina.
+      expect(influenza.dosesPorTemporada, 1);
     });
 
     test('COVID-19 tem intervalo mínimo de 6 meses e 1 dose por gestação', () {

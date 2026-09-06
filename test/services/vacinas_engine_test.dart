@@ -932,6 +932,65 @@ void main() {
       );
     }
 
+    test('0. a temporada avaliada é a que a versão do calendário declara', () {
+      // O identificador vem do calendário, não de uma string solta no teste.
+      expect(temporadaInfluenzaPni2026, temporadaAtual);
+
+      final registrada = influenzaEm(
+        temporada: temporadaInfluenzaPni2026,
+        historico: [doseInfluenza(temporada: temporadaInfluenzaPni2026)],
+      );
+
+      expect(registrada.estado, EstadoVacina.registrada);
+    });
+
+    test('0b. registro de outra temporada não conta para a do calendário', () {
+      final status = influenzaEm(
+        temporada: temporadaInfluenzaPni2026,
+        historico: [doseInfluenza(temporada: temporadaAnterior)],
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('0c. registro sem temporada não conta para a do calendário', () {
+      final status = influenzaEm(
+        temporada: temporadaInfluenzaPni2026,
+        historico: [doseInfluenza(temporada: null)],
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
+    test('0d. sem temporada informada continua VERIFICAR_HISTORICO', () {
+      final status = influenzaEm(
+        temporada: null,
+        historico: [doseInfluenza(temporada: temporadaInfluenzaPni2026)],
+      );
+
+      expect(status.estado, EstadoVacina.verificarHistorico);
+      expect(status.motivo, contains('temporada vigente não informada'));
+    });
+
+    test('0e. a data da aplicação não substitui o identificador', () {
+      // Uma dose datada dentro de 2026, mas sem temporada declarada, não
+      // vira dose de 2026: a engine não deduz a temporada da data.
+      final status = influenzaEm(
+        temporada: temporadaInfluenzaPni2026,
+        historico: [
+          doseInfluenza(
+            temporada: null,
+            dataAplicacao: DateTime(2026, 4, 15),
+          ),
+        ],
+      );
+
+      expect(status.estado, EstadoVacina.periodoRecomendado);
+      expect(status.estado, isNot(EstadoVacina.registrada));
+    });
+
     test('1. temporada informada e sem histórico: período recomendado', () {
       final influenza = influenzaEm();
 

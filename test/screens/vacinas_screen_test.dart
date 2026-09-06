@@ -25,7 +25,10 @@ void main() {
     final inicio = codigo.indexOf(assinatura);
     expect(inicio, greaterThan(-1), reason: assinatura);
 
-    final fim = codigo.indexOf('\n  }', inicio);
+    // Uma linha contendo só "  }": o fecho na indentação de método. Precisa
+    // do \n final para não casar com o "  }) async {" de uma assinatura
+    // multilinha.
+    final fim = codigo.indexOf('\n  }\n', inicio);
     expect(fim, greaterThan(inicio), reason: assinatura);
 
     return codigo.substring(inicio, fim);
@@ -70,6 +73,9 @@ void main() {
       expect(find.text('Registrar vacinação'), findsNothing);
       expect(find.text('Editar'), findsNothing);
       expect(find.text('Editar registro'), findsNothing);
+      expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
+      expect(find.text('Excluir registro?'), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
     });
 
     testWidgets('o cabeçalho continua visível no estado de erro', (tester) async {
@@ -100,7 +106,10 @@ void main() {
       final codigo = fonte();
 
       expect('VacinasEngine.avaliar('.allMatches(codigo), hasLength(1));
-      expect(codigo, contains('temporadaInfluenza: null'));
+      // A temporada é a que a versão do calendário declara, não uma string
+      // solta nem algo derivado da data.
+      expect(codigo, contains('temporadaInfluenza: temporadaInfluenzaPni2026'));
+      expect(codigo, isNot(contains('temporadaInfluenza: null')));
     });
 
     test('a avaliação usa uma única referência temporal', () {
@@ -124,8 +133,8 @@ void main() {
     test('o relógio da tela não fica congelado após um salvamento', () {
       final codigo = fonte();
 
-      // Duas chamadas: uma ao carregar, outra depois de gravar com sucesso.
-      expect('_abrirNovaAvaliacao();'.allMatches(codigo), hasLength(2));
+      // Três chamadas: ao carregar, ao gravar e ao excluir com sucesso.
+      expect('_abrirNovaAvaliacao();'.allMatches(codigo), hasLength(3));
       expect(
         codigo,
         contains('_historico = registros;\n        _abrirNovaAvaliacao();'),
@@ -213,14 +222,16 @@ void main() {
       expect(codigo, contains('RegistroVacinacao? edicaoDe,'));
     });
 
-    test('grava pelo storage e não remove nada nesta etapa', () {
+    test('cada operação do storage tem um único ponto de chamada', () {
       final codigo = fonte();
 
       expect('VacinasStorage.adicionar('.allMatches(codigo), hasLength(1));
       expect('VacinasStorage.novoId()'.allMatches(codigo), hasLength(1));
-      expect('VacinasStorage.carregarRegistros('.allMatches(codigo),
-          hasLength(1));
-      expect(codigo, isNot(contains('VacinasStorage.remover')));
+      expect('VacinasStorage.remover('.allMatches(codigo), hasLength(1));
+      expect(
+        'VacinasStorage.carregarRegistros('.allMatches(codigo),
+        hasLength(1),
+      );
       // \b evita casar dentro de isDismissible, que é parâmetro do sheet.
       expect(codigo, isNot(matches(RegExp(r'\bDismissible'))));
     });
@@ -250,12 +261,33 @@ void main() {
       expect(normalizada, contains('?? OrigemRegistro.registradoPelaUsuaria'));
       expect(normalizada, contains('?? gestacaoAtual.dum'));
       expect(normalizada, contains('?? DateTime.now()'));
-      // A temporada não tem fallback: registro novo nasce com null.
+      // Registro novo recebe a temporada só quando a regra é por temporada.
       expect(
         normalizada,
-        contains('temporadaNoRegistro: edicaoDe?.temporadaNoRegistro'),
+        contains(
+          'temporadaNoRegistro: edicaoDe != null ? edicaoDe.temporadaNoRegistro '
+          ': temporadaDeNovoRegistro',
+        ),
       );
       expect(normalizada, isNot(contains("versaoCalendario: '")));
+      expect(normalizada, isNot(contains('temporadaNoRegistro: DateTime')));
+    });
+
+    test('a temporada do registro novo vem da regra e do calendário', () {
+      final normalizada = fonteNormalizada();
+
+      const declaracao =
+          'final temporadaDeNovoRegistro = regraPorCodigo(vacinaCodigo) is '
+          'RegraDependeTemporada ? temporadaInfluenzaPni2026 : null;';
+
+      expect(normalizada, contains(declaracao));
+
+      // Nada de deduzir a temporada de uma data: nem do relógio, nem da
+      // dataAplicacao, nem de um ano extraído dela.
+      expect(declaracao, isNot(contains('.year')));
+      expect(declaracao, isNot(contains('DateTime')));
+      expect(declaracao, isNot(contains('dataAplicacao')));
+      expect(normalizada, isNot(contains("temporadaNoRegistro: '")));
       expect(normalizada, isNot(contains('temporadaNoRegistro: DateTime')));
     });
 
@@ -338,7 +370,12 @@ void main() {
       expect(codigo, contains('FirestoreErro.mensagemAmigavel(falha)'));
       expect(codigo, contains('salvando = false'));
       // Nenhum pop no caminho de erro: o sheet fica aberto para nova tentativa.
-      expect('Navigator.pop(ctx'.allMatches(codigo), hasLength(2));
+      // Os dois do formulário são o Cancelar e o sucesso da gravação.
+      expect(
+        'Navigator.pop(ctx'
+            .allMatches(corpoDoMetodo('Future<void> _abrirFormulario(')),
+        hasLength(2),
+      );
     });
 
   });
@@ -378,14 +415,18 @@ void main() {
       expect(codigo, isNot(contains('.comId(')));
     });
 
-    test('a edição grava pelo mesmo adicionar, sem excluir nada', () {
+    test('a edição grava pelo adicionar, nunca pelo remover', () {
       final codigo = fonte();
 
       expect('VacinasStorage.adicionar('.allMatches(codigo), hasLength(1));
-      expect(codigo, isNot(contains('VacinasStorage.remover')));
       expect(codigo, isNot(matches(RegExp(r'\bDismissible'))));
-      expect(codigo, isNot(contains("'Excluir'")));
       expect(codigo, isNot(contains('onLongPress')));
+
+      // O remover não aparece dentro do formulário.
+      expect(
+        corpoDoMetodo('Future<void> _abrirFormulario('),
+        isNot(contains('VacinasStorage.remover')),
+      );
     });
 
     test('os campos históricos do registro são preservados', () {
@@ -408,9 +449,18 @@ void main() {
         normalizada,
         contains('dumNoRegistro: edicaoDe?.dumNoRegistro ?? gestacaoAtual.dum'),
       );
+      // Sem ?? aqui: um registro antigo com temporada nula continua nulo,
+      // em vez de ser migrado para a temporada vigente.
       expect(
         normalizada,
-        contains('temporadaNoRegistro: edicaoDe?.temporadaNoRegistro'),
+        contains(
+          'temporadaNoRegistro: edicaoDe != null ? edicaoDe.temporadaNoRegistro '
+          ': temporadaDeNovoRegistro',
+        ),
+      );
+      expect(
+        normalizada,
+        isNot(contains('edicaoDe?.temporadaNoRegistro ??')),
       );
       expect(
         normalizada,
@@ -479,6 +529,132 @@ void main() {
         corpoDoMetodo('List<RegistroVacinacao> _registrosDaVacina('),
         contains('r.id != null'),
       );
+    });
+  });
+
+  group('VacinasScreen — exclusão', () {
+    String corpoDaExclusao() =>
+        corpoDoMetodo('Future<void> _excluirRegistro(');
+
+    test('existe ação de excluir, ligada ao registro daquela linha', () {
+      final codigo = fonte();
+
+      expect(codigo, contains("semanticLabel: 'Excluir'"));
+      expect(codigo, contains('Icons.delete_outline_rounded'));
+      expect(
+        fonteNormalizada(),
+        contains('onTap: () => _excluirRegistro(context, registro)'),
+      );
+      // Recebe o registro inteiro, não um código de vacina.
+      expect(
+        codigo,
+        contains('Future<void> _excluirRegistro(\n    BuildContext context,\n'
+            '    RegistroVacinacao registro,\n  )'),
+      );
+    });
+
+    test('a exclusão nunca se orienta por vacinaCodigo', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, isNot(contains('vacinaCodigo')));
+      expect(corpo, isNot(contains('firstWhere')));
+      expect(corpo, isNot(contains('VacinasStorage.novoId')));
+      expect(corpo, isNot(contains('VacinasStorage.adicionar')));
+    });
+
+    test('remove pelo id do próprio registro, e só se houver id', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('final id = registro.id;'));
+      expect(corpo, contains('if (id == null) return;'));
+      expect(corpo, contains('await VacinasStorage.remover(id)'));
+      expect(corpo, contains('removeWhere((r) => r.id == id)'));
+    });
+
+    test('há confirmação explícita em AlertDialog antes de remover', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('showDialog<bool>'));
+      expect(corpo, contains('AlertDialog'));
+      expect(corpo, contains("'Excluir registro?'"));
+      expect(
+        corpo,
+        contains(
+          'Esse registro será removido do seu histórico de ',
+        ),
+      );
+      expect(corpo, contains("'Cancelar'"));
+      expect(corpo, contains("'Excluir'"));
+
+      // O storage só é tocado dentro de confirmar(), depois do diálogo abrir.
+      final abre = corpo.indexOf('showDialog<bool>');
+      final remove = corpo.indexOf('await VacinasStorage.remover(id)');
+      expect(remove, greaterThan(abre));
+    });
+
+    test('Cancelar não chega a chamar o storage', () {
+      final corpo = corpoDaExclusao();
+
+      expect(
+        fonteNormalizada(),
+        contains('onPressed: excluindo ? null : () => Navigator.pop(ctx, false)'),
+      );
+      // O remover está dentro de confirmar(), que é o onPressed do Excluir.
+      expect(corpo, contains('onPressed: excluindo ? null : confirmar'));
+      expect(
+        corpo.indexOf('Future<void> confirmar()'),
+        lessThan(corpo.indexOf('await VacinasStorage.remover(id)')),
+      );
+    });
+
+    test('a lista só muda depois de remover() devolver true', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('if (removeu == true)'));
+      expect(corpo, contains('if (!mounted || confirmado != true) return;'));
+
+      final remove = corpo.indexOf('await VacinasStorage.remover(id)');
+      final tiraDaLista = corpo.indexOf('removeWhere((r) => r.id == id)');
+      expect(tiraDaLista, greaterThan(remove));
+    });
+
+    test('falha e recusa mantêm o histórico intacto', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('FirestoreErro.mensagemAmigavel(falha)'));
+      expect(corpo, contains('excluindo = false;'));
+      // Um único ponto que mexe no histórico, e ele exige a confirmação.
+      expect('_historico ='.allMatches(corpo), hasLength(1));
+      // false não é sucesso: cai no mesmo ramo do erro.
+      expect(corpo, contains('sessão expirada'));
+    });
+
+    test('após o sucesso a engine reavalia pelo mecanismo existente', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('_abrirNovaAvaliacao();'));
+      expect(corpo, isNot(contains('EstadoVacina')));
+      expect(corpo, isNot(contains('VacinasEngine')));
+      expect(corpo, isNot(contains('podeRegistrar')));
+    });
+
+    test('impede confirmar duas vezes e fechar no meio da exclusão', () {
+      final corpo = corpoDaExclusao();
+
+      expect(corpo, contains('if (excluindo) return;'));
+      expect(corpo, contains('excluindo = true;'));
+      expect(corpo, contains('canPop: !excluindo'));
+    });
+
+    test('as três ações coexistem, cada uma no seu ponto', () {
+      final codigo = fonte();
+
+      expect(codigo, contains("'Registrar'"));
+      expect(codigo, contains("'Editar'"));
+      expect(codigo, contains("semanticLabel: 'Excluir'"));
+      expect('Future<void> _excluirRegistro('.allMatches(codigo), hasLength(1));
+      expect('Future<void> _abrirFormulario('.allMatches(codigo), hasLength(1));
+      expect('VacinasEngine.avaliar('.allMatches(codigo), hasLength(1));
     });
   });
 }

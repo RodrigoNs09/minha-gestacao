@@ -74,7 +74,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
       dataAtual: avaliadoEm,
       historico: historico,
       calendario: calendarioPni2026,
-      temporadaInfluenza: null,
+      temporadaInfluenza: temporadaInfluenzaPni2026,
     );
   }
 
@@ -274,6 +274,13 @@ class _VacinasScreenState extends State<VacinasScreen> {
     final pedeNumeroDaDose =
         regraPorCodigo(vacinaCodigo) is RegraDependeHistorico;
 
+    // A temporada só existe para regras avaliadas por temporada, e o valor
+    // vem declarado pelo calendário — nunca da data da aplicação.
+    final temporadaDeNovoRegistro =
+        regraPorCodigo(vacinaCodigo) is RegraDependeTemporada
+        ? temporadaInfluenzaPni2026
+        : null;
+
     // Edição escreve no documento que já existe; só um cadastro novo gera id.
     _idPendente = edicaoDe?.id ?? VacinasStorage.novoId();
 
@@ -323,8 +330,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
                 erroDoSalvamento = null;
               });
 
-              // Numa edição só situação, data e dose mudam: o resto é o
-              // histórico do registro e é preservado como estava.
               final registro = RegistroVacinacao(
                 id: _idPendente,
                 vacinaCodigo: vacinaCodigo,
@@ -339,7 +344,9 @@ class _VacinasScreenState extends State<VacinasScreen> {
                     : null,
                 numeroDaDose: mostraNumero ? numeroDaDose : null,
                 dumNoRegistro: edicaoDe?.dumNoRegistro ?? gestacaoAtual.dum,
-                temporadaNoRegistro: edicaoDe?.temporadaNoRegistro,
+                temporadaNoRegistro: edicaoDe != null
+                    ? edicaoDe.temporadaNoRegistro
+                    : temporadaDeNovoRegistro,
                 criadoEm: edicaoDe?.criadoEm ?? DateTime.now(),
                 observacao: edicaoDe?.observacao,
               );
