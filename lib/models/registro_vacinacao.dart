@@ -40,8 +40,6 @@ class RegistroVacinacao {
 
   final DateTime? dataAplicacao;
 
-  /// Posição declarada da dose no esquema. `null` = posição desconhecida,
-  /// nunca primeira dose. Não é inferida da data nem da ordem dos registros.
   final int? numeroDaDose;
 
   final SituacaoInformada situacaoInformada;
@@ -49,6 +47,8 @@ class RegistroVacinacao {
   final OrigemRegistro origemRegistro;
 
   final DateTime? dumNoRegistro;
+
+  final String? gestacaoId;
 
   final String? temporadaNoRegistro;
 
@@ -67,6 +67,7 @@ class RegistroVacinacao {
     this.dataAplicacao,
     this.numeroDaDose,
     this.dumNoRegistro,
+    this.gestacaoId,
     this.temporadaNoRegistro,
     this.criadoEm,
     this.observacao,
@@ -82,6 +83,7 @@ class RegistroVacinacao {
       dataAplicacao: dataAplicacao,
       numeroDaDose: numeroDaDose,
       dumNoRegistro: dumNoRegistro,
+      gestacaoId: gestacaoId,
       temporadaNoRegistro: temporadaNoRegistro,
       criadoEm: criadoEm,
       observacao: observacao,
@@ -105,6 +107,9 @@ class RegistroVacinacao {
     final dum = dumNoRegistro;
     if (dum != null) mapa['dumNoRegistro'] = dum.toIso8601String();
 
+    final gestacao = gestacaoId;
+    if (gestacao != null) mapa['gestacaoId'] = gestacao;
+
     final temporada = temporadaNoRegistro;
     if (temporada != null) mapa['temporadaNoRegistro'] = temporada;
 
@@ -121,13 +126,15 @@ class RegistroVacinacao {
     return RegistroVacinacao(
       id: id,
       vacinaCodigo: _texto(map['vacinaCodigo']) ?? '',
-      situacaoInformada: SituacaoInformada.porCodigo(map['situacaoInformada']) ??
+      situacaoInformada:
+          SituacaoInformada.porCodigo(map['situacaoInformada']) ??
           SituacaoInformada.situacaoDesconhecida,
       origemRegistro: OrigemRegistro.porCodigo(map['origemRegistro']),
       versaoCalendario: _texto(map['versaoCalendario']) ?? '',
       dataAplicacao: _parsearData(map['dataAplicacao']),
       numeroDaDose: _inteiro(map['numeroDaDose']),
       dumNoRegistro: _parsearData(map['dumNoRegistro']),
+      gestacaoId: _texto(map['gestacaoId']),
       temporadaNoRegistro: _texto(map['temporadaNoRegistro']),
       criadoEm: _parsearData(map['criadoEm']),
       observacao: _texto(map['observacao']),

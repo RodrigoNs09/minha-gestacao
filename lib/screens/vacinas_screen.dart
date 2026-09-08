@@ -24,8 +24,40 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
   DateTime? _avaliadoEm;
   DateTime? _dum;
+  String? _gestacaoId;
 
   String? _idPendente;
+
+  bool _gravando = false;
+  String? _excluindoId;
+
+  void _registrarSalvo(RegistroVacinacao salvo) {
+    if (!mounted) return;
+
+    setState(() {
+      final lista = [...?_historico];
+      final indice = lista.indexWhere((r) => r.id == salvo.id);
+
+      if (indice >= 0) {
+        lista[indice] = salvo;
+      } else {
+        lista.add(salvo);
+      }
+      _historico = lista;
+      _idPendente = null;
+      _abrirNovaAvaliacao();
+    });
+  }
+
+  void _registrarRemocao(String id) {
+    if (!mounted) return;
+
+    setState(() {
+
+      _historico = [...?_historico]..removeWhere((r) => r.id == id);
+      _abrirNovaAvaliacao();
+    });
+  }
 
   @override
   void initState() {
@@ -36,6 +68,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
   void _abrirNovaAvaliacao() {
     _avaliadoEm = DateTime.now();
     _dum = gestacaoAtual.dum;
+    _gestacaoId = gestacaoAtual.id;
   }
 
   Future<void> _carregar() async {
@@ -69,12 +102,13 @@ class _VacinasScreenState extends State<VacinasScreen> {
     final dum = _dum!;
 
     return VacinasEngine.avaliar(
-      diasGestacaoBruto: avaliadoEm.difference(dum).inDays,
+      diasGestacaoBruto: diasDeCalendarioEntre(dum, avaliadoEm),
       dum: dum,
       dataAtual: avaliadoEm,
       historico: historico,
       calendario: calendarioPni2026,
       temporadaInfluenza: temporadaInfluenzaPni2026,
+      gestacaoId: _gestacaoId,
     );
   }
 
@@ -113,6 +147,15 @@ class _VacinasScreenState extends State<VacinasScreen> {
         .toList(growable: false);
   }
 
+  List<RegistroVacinacao> _registrosNaoReconhecidos() {
+    final historico = _historico;
+    if (historico == null) return const [];
+
+    return historico
+        .where((r) => regraPorCodigo(r.vacinaCodigo) == null && r.id != null)
+        .toList(growable: false);
+  }
+
   String _resumoDoRegistro(RegistroVacinacao registro) {
     final partes = <String>[_rotuloDaSituacao(registro.situacaoInformada)];
 
@@ -129,14 +172,16 @@ class _VacinasScreenState extends State<VacinasScreen> {
     BuildContext context,
     RegistroVacinacao registro,
   ) async {
-    // Sem id não há documento a remover: a ação não segue.
+
     final id = registro.id;
     if (id == null) return;
+
+    if (_excluindoId != null) return;
 
     bool excluindo = false;
     String? erroDaExclusao;
 
-    final confirmado = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -148,6 +193,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
                 excluindo = true;
                 erroDaExclusao = null;
               });
+              _excluindoId = id;
 
               bool? removeu;
               Object? falha;
@@ -156,16 +202,17 @@ class _VacinasScreenState extends State<VacinasScreen> {
               } catch (erro) {
                 falha = erro;
               }
-
-              if (!ctx.mounted) return;
+              _excluindoId = null;
 
               if (removeu == true) {
-                Navigator.pop(ctx, true);
+
+                _registrarRemocao(id);
+                if (ctx.mounted) Navigator.pop(ctx);
                 return;
               }
 
-              // Falha ou recusa: nada sai da lista e o diálogo continua
-              // aberto para uma nova tentativa.
+              if (!ctx.mounted) return;
+
               setDialogState(() {
                 excluindo = false;
                 erroDaExclusao = falha != null
@@ -174,96 +221,84 @@ class _VacinasScreenState extends State<VacinasScreen> {
               });
             }
 
-            return PopScope(
-              canPop: !excluindo,
-              child: AlertDialog(
-                backgroundColor: AppColors.surface(ctx),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+            return AlertDialog(
+              backgroundColor: AppColors.surface(ctx),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                'Excluir registro?',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary(ctx),
                 ),
-                title: Text(
-                  'Excluir registro?',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary(ctx),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Esse registro será removido do seu histórico de '
+                    'vacinação.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: AppColors.textSecondary(ctx),
+                    ),
                   ),
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  const SizedBox(height: 8),
+                  Text(
+                    _resumoDoRegistro(registro),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted(ctx),
+                    ),
+                  ),
+                  if (erroDaExclusao != null) ...[
+                    const SizedBox(height: 12),
                     Text(
-                      'Esse registro será removido do seu histórico de '
-                      'vacinação.',
+                      erroDaExclusao!,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         height: 1.35,
                         color: AppColors.textSecondary(ctx),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _resumoDoRegistro(registro),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMuted(ctx),
-                      ),
-                    ),
-                    if (erroDaExclusao != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        erroDaExclusao!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          height: 1.35,
-                          color: AppColors.textSecondary(ctx),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: excluindo
-                        ? null
-                        : () => Navigator.pop(ctx, false),
-                    child: Text(
-                      'Cancelar',
-                      style: TextStyle(color: AppColors.textPrimary(ctx)),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: excluindo ? null : confirmar,
-                    child: excluindo
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            'Excluir',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.pink,
-                            ),
-                          ),
-                  ),
                 ],
               ),
+              actions: [
+                TextButton(
+
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancelar',
+                    style: TextStyle(color: AppColors.textPrimary(ctx)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: excluindo ? null : confirmar,
+                  child: excluindo
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'Excluir',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.pink,
+                          ),
+                        ),
+                ),
+              ],
             );
           },
         );
       },
     );
-
-    if (!mounted || confirmado != true) return;
-
-    setState(() {
-      // Só o documento confirmado pelo storage sai da lista.
-      _historico = [...?_historico]..removeWhere((r) => r.id == id);
-      _abrirNovaAvaliacao();
-    });
   }
 
   Future<void> _abrirFormulario(
@@ -271,17 +306,26 @@ class _VacinasScreenState extends State<VacinasScreen> {
     String vacinaCodigo, {
     RegistroVacinacao? edicaoDe,
   }) async {
-    final pedeNumeroDaDose =
-        regraPorCodigo(vacinaCodigo) is RegraDependeHistorico;
 
-    // A temporada só existe para regras avaliadas por temporada, e o valor
-    // vem declarado pelo calendário — nunca da data da aplicação.
+    if (_gravando) return;
+
+    final regraDaVacina = regraPorCodigo(vacinaCodigo);
+    final pedeNumeroDaDose = regraDaVacina is RegraDependeHistorico;
+
+    final posicoesDaDose =
+        regraDaVacina is RegraDependeHistorico &&
+            regraDaVacina.dosesDoEsquemaBasico > 0
+        ? List<int>.generate(
+            regraDaVacina.dosesDoEsquemaBasico,
+            (indice) => indice + 1,
+          )
+        : const <int>[];
+
     final temporadaDeNovoRegistro =
         regraPorCodigo(vacinaCodigo) is RegraDependeTemporada
         ? temporadaInfluenzaPni2026
         : null;
 
-    // Edição escreve no documento que já existe; só um cadastro novo gera id.
     _idPendente = edicaoDe?.id ?? VacinasStorage.novoId();
 
     SituacaoInformada? situacao = edicaoDe?.situacaoInformada;
@@ -290,7 +334,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
     bool salvando = false;
     String? erroDoSalvamento;
 
-    final salvo = await showModalBottomSheet<RegistroVacinacao>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -329,6 +373,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
                 salvando = true;
                 erroDoSalvamento = null;
               });
+              _gravando = true;
 
               final registro = RegistroVacinacao(
                 id: _idPendente,
@@ -344,6 +389,10 @@ class _VacinasScreenState extends State<VacinasScreen> {
                     : null,
                 numeroDaDose: mostraNumero ? numeroDaDose : null,
                 dumNoRegistro: edicaoDe?.dumNoRegistro ?? gestacaoAtual.dum,
+
+                gestacaoId: edicaoDe != null
+                    ? edicaoDe.gestacaoId
+                    : gestacaoAtual.id,
                 temporadaNoRegistro: edicaoDe != null
                     ? edicaoDe.temporadaNoRegistro
                     : temporadaDeNovoRegistro,
@@ -358,13 +407,16 @@ class _VacinasScreenState extends State<VacinasScreen> {
               } catch (erro) {
                 falha = erro;
               }
-
-              if (!ctx.mounted) return;
+              _gravando = false;
 
               if (gravado != null) {
-                Navigator.pop(ctx, gravado);
+
+                _registrarSalvo(gravado);
+                if (ctx.mounted) Navigator.pop(ctx);
                 return;
               }
+
+              if (!ctx.mounted) return;
 
               setModalState(() {
                 salvando = false;
@@ -374,46 +426,118 @@ class _VacinasScreenState extends State<VacinasScreen> {
               });
             }
 
-            return PopScope(
-              canPop: !salvando,
-              child: Container(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surface(ctx),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface(ctx),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    edicaoDe == null
+                        ? 'Registrar vacinação'
+                        : 'Editar registro',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(ctx),
+                    ),
                   ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      edicaoDe == null
-                          ? 'Registrar vacinação'
-                          : 'Editar registro',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary(ctx),
-                      ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _nomeDaVacina(vacinaCodigo),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary(ctx),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _nomeDaVacina(vacinaCodigo),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary(ctx),
-                      ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Situação da vacinação',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                      color: AppColors.textMuted(ctx),
                     ),
-                    const SizedBox(height: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  ...SituacaoInformada.values.map((opcao) {
+                    final marcada = situacao == opcao;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: salvando
+                            ? null
+                            : () => setModalState(() {
+                                situacao = opcao;
+                                if (opcao !=
+                                    SituacaoInformada.aplicadaComData) {
+                                  dataAplicacao = null;
+                                }
+                                if (!_declaraAplicacao(opcao)) {
+                                  numeroDaDose = null;
+                                }
+                              }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: marcada
+                                ? AppColors.statPurple(ctx)
+                                : AppColors.surfaceVariant(ctx),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: marcada
+                                  ? AppColors.accent(ctx)
+                                  : AppColors.border(ctx),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                marcada
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                size: 16,
+                                color: marcada
+                                    ? AppColors.accent(ctx)
+                                    : AppColors.textMuted(ctx),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _rotuloDaSituacao(opcao),
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppColors.textPrimary(ctx),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  if (situacao == SituacaoInformada.aplicadaComData) ...[
+                    const SizedBox(height: 12),
                     Text(
-                      'Situação da vacinação',
+                      'Data da aplicação',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -422,265 +546,185 @@ class _VacinasScreenState extends State<VacinasScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...SituacaoInformada.values.map((opcao) {
-                      final marcada = situacao == opcao;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: InkWell(
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: salvando ? null : escolherData,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant(ctx),
                           borderRadius: BorderRadius.circular(12),
-                          onTap: salvando
-                              ? null
-                              : () => setModalState(() {
-                                  situacao = opcao;
-                                  if (opcao !=
-                                      SituacaoInformada.aplicadaComData) {
-                                    dataAplicacao = null;
-                                  }
-                                  if (!_declaraAplicacao(opcao)) {
-                                    numeroDaDose = null;
-                                  }
-                                }),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: marcada
-                                  ? AppColors.statPurple(ctx)
-                                  : AppColors.surfaceVariant(ctx),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: marcada
-                                    ? AppColors.accent(ctx)
-                                    : AppColors.border(ctx),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  marcada
-                                      ? Icons.radio_button_checked
-                                      : Icons.radio_button_unchecked,
-                                  size: 16,
-                                  color: marcada
-                                      ? AppColors.accent(ctx)
-                                      : AppColors.textMuted(ctx),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _rotuloDaSituacao(opcao),
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: AppColors.textPrimary(ctx),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          border: Border.all(
+                            color: AppColors.border(ctx),
+                            width: 0.5,
                           ),
                         ),
-                      );
-                    }),
-                    if (situacao == SituacaoInformada.aplicadaComData) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Data da aplicação',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                          color: AppColors.textMuted(ctx),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: salvando ? null : escolherData,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant(ctx),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.border(ctx),
-                              width: 0.5,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 14,
+                              color: AppColors.accent(ctx),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today_rounded,
-                                size: 14,
-                                color: AppColors.accent(ctx),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                dataAplicacao == null
-                                    ? 'Escolher data'
-                                    : _formatarData(dataAplicacao!),
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: dataAplicacao == null
-                                      ? AppColors.textSecondary(ctx)
-                                      : AppColors.textPrimary(ctx),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (mostraNumero) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Número da dose',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                          color: AppColors.textMuted(ctx),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          for (final numero in [1, 2, 3])
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: salvando
-                                    ? null
-                                    : () => setModalState(() {
-                                        numeroDaDose = numeroDaDose == numero
-                                            ? null
-                                            : numero;
-                                      }),
-                                child: Container(
-                                  width: 44,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: numeroDaDose == numero
-                                        ? AppColors.statPurple(ctx)
-                                        : AppColors.surfaceVariant(ctx),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: numeroDaDose == numero
-                                          ? AppColors.accent(ctx)
-                                          : AppColors.border(ctx),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '$numero',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textPrimary(ctx),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        'Deixe em branco se não souber.',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textMuted(ctx),
-                        ),
-                      ),
-                    ],
-                    if (erroDoSalvamento != null) ...[
-                      const SizedBox(height: 14),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.cloud_off_rounded,
-                            size: 14,
-                            color: AppColors.textMuted(ctx),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              erroDoSalvamento!,
+                            const SizedBox(width: 10),
+                            Text(
+                              dataAplicacao == null
+                                  ? 'Escolher data'
+                                  : _formatarData(dataAplicacao!),
                               style: TextStyle(
-                                fontSize: 11,
-                                height: 1.35,
-                                color: AppColors.textSecondary(ctx),
+                                fontSize: 12.5,
+                                color: dataAplicacao == null
+                                    ? AppColors.textSecondary(ctx)
+                                    : AppColors.textPrimary(ctx),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ],
-                    const SizedBox(height: 20),
+                    ),
+                  ],
+                  if (mostraNumero) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Número da dose',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                        color: AppColors.textMuted(ctx),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: salvando
-                                ? null
-                                : () => Navigator.pop(ctx, null),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: AppColors.border(ctx)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: Text(
-                              'Cancelar',
-                              style: TextStyle(
-                                color: AppColors.textPrimary(ctx),
+                        for (final numero in posicoesDaDose)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: salvando
+                                  ? null
+                                  : () => setModalState(() {
+                                      numeroDaDose = numeroDaDose == numero
+                                          ? null
+                                          : numero;
+                                    }),
+                              child: Container(
+                                width: 44,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: numeroDaDose == numero
+                                      ? AppColors.statPurple(ctx)
+                                      : AppColors.surfaceVariant(ctx),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: numeroDaDose == numero
+                                        ? AppColors.accent(ctx)
+                                        : AppColors.border(ctx),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  '$numero',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textPrimary(ctx),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Deixe em branco se não souber.',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textMuted(ctx),
+                      ),
+                    ),
+                  ],
+                  if (erroDoSalvamento != null) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.cloud_off_rounded,
+                          size: 14,
+                          color: AppColors.textMuted(ctx),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: ElevatedButton(
-                            onPressed: (salvando || !podeSalvar)
-                                ? null
-                                : salvar,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryPurple,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                          child: Text(
+                            erroDoSalvamento!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              color: AppColors.textSecondary(ctx),
                             ),
-                            child: salvando
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Salvar',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
                           ),
                         ),
                       ],
                     ),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: AppColors.border(ctx)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancelar',
+                            style: TextStyle(color: AppColors.textPrimary(ctx)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: (salvando || !podeSalvar) ? null : salvar,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryPurple,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: salvando
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Salvar',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           },
@@ -690,27 +734,15 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
     if (!mounted) return;
 
-    setState(() {
-      if (salvo != null) {
-        final lista = [...?_historico];
-        final indice = lista.indexWhere((r) => r.id == salvo.id);
-        // Mesmo id: substitui no lugar. Id novo: entra no fim da lista.
-        if (indice >= 0) {
-          lista[indice] = salvo;
-        } else {
-          lista.add(salvo);
-        }
-        _historico = lista;
-        _abrirNovaAvaliacao();
-      }
-      _idPendente = null;
-    });
+    if (_gravando) return;
+
+    setState(() => _idPendente = null);
   }
 
   Widget _cardVacina(BuildContext context, StatusVacinacao status) {
     final apresentacao = apresentacaoDe(status.estado);
     final janela = status.proximaJanela;
-    // A associação é pelo código da vacina do próprio card.
+
     final registros = _registrosDaVacina(status.vacinaCodigo);
 
     return Container(
@@ -977,6 +1009,92 @@ class _VacinasScreenState extends State<VacinasScreen> {
     );
   }
 
+  Widget _blocoNaoReconhecidos(
+    BuildContext context,
+    List<RegistroVacinacao> registros,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Registros não reconhecidos',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Existem registros que não fazem parte do calendário desta versão.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.35,
+              color: AppColors.textSecondary(context),
+            ),
+          ),
+          ...registros.map(
+            (registro) => Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          registro.vacinaCodigo,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textPrimary(context),
+                          ),
+                        ),
+                        Text(
+                          _resumoDoRegistro(registro),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.textSecondary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _excluirRegistro(context, registro),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 15,
+                        color: AppColors.textMuted(context),
+                        semanticLabel: 'Excluir',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _conteudo(BuildContext context) {
     if (_carregando) {
       return const Center(child: CircularProgressIndicator());
@@ -986,11 +1104,14 @@ class _VacinasScreenState extends State<VacinasScreen> {
     if (erro != null) return _painelDeErro(context, erro);
 
     final status = _avaliar();
+    final naoReconhecidos = _registrosNaoReconhecidos();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
         ...status.map((s) => _cardVacina(context, s)),
+        if (naoReconhecidos.isNotEmpty)
+          _blocoNaoReconhecidos(context, naoReconhecidos),
         const SizedBox(height: 6),
         Text(
           mensagemGeralVacinas,

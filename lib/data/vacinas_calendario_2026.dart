@@ -2,9 +2,6 @@ library;
 
 const String versaoCalendarioPni2026 = 'PNI-2026';
 
-// Temporada de influenza que esta versão do calendário avalia. Identificador
-// opaco: não é data, não é intervalo e não se deriva do relógio. Uma nova
-// temporada é uma nova versão do calendário.
 const String temporadaInfluenzaPni2026 = '2026';
 
 const String mensagemPeriodoRecomendado =
@@ -214,6 +211,21 @@ final class RegraDependeIntervaloUltimaDose extends RegraCalendario {
   bool get parametrosCompletos =>
       intervaloMinimoDesdeUltimaDose.valor > 0 && dosesPorGestacao != null;
 }
+final class RegraDescontinuada extends RegraCalendario {
+  const RegraDescontinuada({
+    required super.codigo,
+    required super.nomeExibicao,
+    required super.versaoCalendario,
+    super.composicao,
+    super.categoria = CategoriaVacina.excepcional,
+  });
+
+  @override
+  bool get exigeAvaliacaoProfissional => false;
+
+  @override
+  bool get parametrosCompletos => true;
+}
 
 final class RegraAvaliacaoProfissional extends RegraCalendario {
   const RegraAvaliacaoProfissional({
@@ -229,7 +241,6 @@ final class RegraAvaliacaoProfissional extends RegraCalendario {
   @override
   bool get parametrosCompletos => true;
 }
-
 
 const String codigoHepatiteB = 'HEPATITE_B';
 const String codigoDt = 'DT';
@@ -272,10 +283,7 @@ const List<RegraCalendario> calendarioPni2026 = [
     versaoCalendario: versaoCalendarioPni2026,
     dosesDoEsquemaBasico: 3,
     reiniciaEsquemaIniciado: false,
-    composicao: {
-      ComponenteVacinal.difterico,
-      ComponenteVacinal.tetanico,
-    },
+    composicao: {ComponenteVacinal.difterico, ComponenteVacinal.tetanico},
     componentesDoIntervalo: {
       ComponenteVacinal.difterico,
       ComponenteVacinal.tetanico,

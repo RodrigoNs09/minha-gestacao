@@ -76,6 +76,7 @@ void main() {
       expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
       expect(find.text('Excluir registro?'), findsNothing);
       expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Registros não reconhecidos'), findsNothing);
     });
 
     testWidgets('o cabeçalho continua visível no estado de erro', (tester) async {
@@ -116,7 +117,11 @@ void main() {
       final codigo = fonte();
 
       expect(codigo, contains('dataAtual: avaliadoEm'));
-      expect(codigo, contains('avaliadoEm.difference(dum).inDays'));
+      // Dias civis, não duração decorrida: a hora gravada na DUM não pode
+      // atrasar a abertura de uma janela.
+      expect(codigo, contains('diasDeCalendarioEntre(dum, avaliadoEm)'));
+      expect(codigo, isNot(contains('avaliadoEm.difference(dum)')));
+      expect(codigo, isNot(contains('.inDays')));
 
       // O instante é lido uma única vez por avaliação, e nunca dentro dela.
       final abertura = corpoDoMetodo('void _abrirNovaAvaliacao()');
@@ -140,10 +145,17 @@ void main() {
         contains('_historico = registros;\n        _abrirNovaAvaliacao();'),
       );
 
-      // A renovação fica dentro do if do salvamento; a limpeza do id, fora.
+      // Gravação e remoção renovam a avaliação nos seus próprios métodos.
       expect(
         fonteNormalizada(),
-        contains('_historico = lista; _abrirNovaAvaliacao(); } _idPendente = null;'),
+        contains('_historico = lista; _idPendente = null; _abrirNovaAvaliacao();'),
+      );
+      expect(
+        fonteNormalizada(),
+        contains(
+          '_historico = [...?_historico]..removeWhere((r) => r.id == id); '
+          '_abrirNovaAvaliacao();',
+        ),
       );
     });
 
@@ -239,17 +251,21 @@ void main() {
     test('o id pendente é criado ao abrir e só é limpo depois do sheet', () {
       final codigo = fonte();
 
+      final corpo = corpoDoMetodo('Future<void> _abrirFormulario(');
+
       final gera =
-          codigo.indexOf('_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();');
-      final abre = codigo.indexOf('await showModalBottomSheet<RegistroVacinacao>');
-      final limpa = codigo.indexOf('_idPendente = null;');
+          corpo.indexOf('_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();');
+      final abre = corpo.indexOf('await showModalBottomSheet<void>');
+      final limpa = corpo.indexOf('setState(() => _idPendente = null);');
 
       expect(gera, greaterThan(-1));
       expect(abre, greaterThan(gera));
-      // A limpeza vem depois do sheet fechar: uma falha mantém o mesmo id.
+      // A limpeza vem depois do sheet fechar, e só se nada estiver em voo.
       expect(limpa, greaterThan(abre));
-      expect('_idPendente = null;'.allMatches(codigo), hasLength(1));
+      expect(corpo, contains('if (_gravando) return;'));
       expect(codigo, contains('id: _idPendente'));
+      // Os dois pontos que zeram o id: o sucesso e o cancelamento limpo.
+      expect('_idPendente = null'.allMatches(codigo), hasLength(2));
     });
 
     test('um registro novo leva os campos aprovados e nada além', () {
@@ -291,10 +307,45 @@ void main() {
       expect(normalizada, isNot(contains('temporadaNoRegistro: DateTime')));
     });
 
+    test('as posições de dose vêm da regra, não de uma lista fixa', () {
+      final normalizada = fonteNormalizada();
+
+      expect(
+        normalizada,
+        contains(
+          'final posicoesDaDose = regraDaVacina is RegraDependeHistorico && '
+          'regraDaVacina.dosesDoEsquemaBasico > 0 ? List<int>.generate( '
+          'regraDaVacina.dosesDoEsquemaBasico, (indice) => indice + 1, ) '
+          ': const <int>[];',
+        ),
+      );
+      expect(normalizada, contains('for (final numero in posicoesDaDose)'));
+
+      // O literal fixo não pode voltar.
+      expect(normalizada, isNot(contains('[1, 2, 3]')));
+      expect(normalizada, isNot(contains('in [1,')));
+    });
+
+    test('vacinas que não dependem de histórico não oferecem dose', () {
+      final normalizada = fonteNormalizada();
+
+      // Sem regra de histórico a lista é vazia, então o for não gera nada,
+      // e o bloco inteiro segue atrás de mostraNumero.
+      expect(normalizada, contains(': const <int>[];'));
+      expect(
+        normalizada,
+        contains(
+          'final mostraNumero = pedeNumeroDaDose && _declaraAplicacao(situacao)',
+        ),
+      );
+      expect(normalizada, contains('if (mostraNumero)'));
+    });
+
     test('o número da dose vem do tipo da regra, sem código fixo', () {
       final codigo = fonte();
 
-      expect(codigo, contains('regraPorCodigo(vacinaCodigo) is RegraDependeHistorico'));
+      expect(codigo, contains('regraDaVacina is RegraDependeHistorico'));
+      expect(codigo, contains('final regraDaVacina = regraPorCodigo(vacinaCodigo)'));
 
       for (final codigoDeVacina in [
         'codigoHepatiteB',
@@ -341,13 +392,18 @@ void main() {
     test('a lista só muda depois da confirmação do servidor', () {
       final codigo = fonte();
 
-      final grava = codigo.indexOf('await VacinasStorage.adicionar(registro)');
-      final atualiza = codigo.indexOf('_historico = lista;');
+      // A lista só é tocada dentro de _registrarSalvo, e ele só é chamado
+      // no ramo de sucesso da gravação.
+      expect(codigo, contains('if (gravado != null)'));
+      expect(codigo, contains('_registrarSalvo(gravado);'));
+      expect('_registrarSalvo('.allMatches(codigo), hasLength(2));
+
+      final corpo = corpoDoMetodo('Future<void> _abrirFormulario(');
+      final grava = corpo.indexOf('await VacinasStorage.adicionar(registro)');
+      final aplica = corpo.indexOf('_registrarSalvo(gravado);');
 
       expect(grava, greaterThan(-1));
-      expect(atualiza, greaterThan(grava));
-      expect(codigo, contains('if (gravado != null)'));
-      expect(codigo, contains('if (salvo != null)'));
+      expect(aplica, greaterThan(grava));
     });
 
     test('há proteção contra clique duplo durante o salvamento', () {
@@ -359,8 +415,10 @@ void main() {
         fonteNormalizada(),
         contains('onPressed: (salvando || !podeSalvar) ? null : salvar'),
       );
-      // O sheet também não pode ser fechado no meio de uma gravação.
-      expect(codigo, contains('canPop: !salvando'));
+      // Uma gravação em voo bloqueia abrir outro formulário, então nem
+      // fechando o sheet dá para disparar uma segunda.
+      expect(codigo, contains('if (_gravando) return;'));
+      expect(codigo, isNot(contains('canPop')));
     });
 
     test('a falha mostra a mensagem do FirestoreErro e mantém o formulário',
@@ -371,11 +429,9 @@ void main() {
       expect(codigo, contains('salvando = false'));
       // Nenhum pop no caminho de erro: o sheet fica aberto para nova tentativa.
       // Os dois do formulário são o Cancelar e o sucesso da gravação.
-      expect(
-        'Navigator.pop(ctx'
-            .allMatches(corpoDoMetodo('Future<void> _abrirFormulario(')),
-        hasLength(2),
-      );
+      final formulario = corpoDoMetodo('Future<void> _abrirFormulario(');
+      expect('Navigator.pop(ctx'.allMatches(formulario), hasLength(2));
+      expect(formulario, contains('if (!ctx.mounted) return;'));
     });
 
   });
@@ -515,13 +571,13 @@ void main() {
     test('a lista substitui pelo mesmo id em vez de duplicar', () {
       final codigo = fonte();
 
-      expect(codigo, contains('lista.indexWhere((r) => r.id == salvo.id)'));
-      expect(codigo, contains('lista[indice] = salvo;'));
-      expect(codigo, contains('lista.add(salvo);'));
+      final corpo = corpoDoMetodo('void _registrarSalvo(');
 
-      final grava = codigo.indexOf('await VacinasStorage.adicionar(registro)');
-      final atualiza = codigo.indexOf('lista[indice] = salvo;');
-      expect(atualiza, greaterThan(grava));
+      expect(corpo, contains('lista.indexWhere((r) => r.id == salvo.id)'));
+      expect(corpo, contains('lista[indice] = salvo;'));
+      expect(corpo, contains('lista.add(salvo);'));
+      // Um único ponto de escrita na lista, chamado só após o sucesso.
+      expect('_historico = lista;'.allMatches(codigo), hasLength(1));
     });
 
     test('só registros com id podem ser editados', () {
@@ -529,6 +585,262 @@ void main() {
         corpoDoMetodo('List<RegistroVacinacao> _registrosDaVacina('),
         contains('r.id != null'),
       );
+    });
+  });
+
+  group('VacinasScreen — nunca fica intransponível', () {
+    String formulario() => corpoDoMetodo('Future<void> _abrirFormulario(');
+    String exclusao() => corpoDoMetodo('Future<void> _excluirRegistro(');
+
+    test('1. salvando não permite uma segunda submissão', () {
+      final corpo = formulario();
+
+      // Três barreiras: guarda na função, botão desabilitado e guarda no
+      // State, que sobrevive ao sheet fechar.
+      expect(corpo, contains('if (salvando || !podeSalvar) return;'));
+      expect(
+        fonteNormalizada(),
+        contains('onPressed: (salvando || !podeSalvar) ? null : salvar'),
+      );
+      expect(corpo, contains('if (_gravando) return;'));
+      expect('VacinasStorage.adicionar('.allMatches(fonte()), hasLength(1));
+    });
+
+    test('2. excluindo não permite uma segunda exclusão', () {
+      final corpo = exclusao();
+
+      expect(corpo, contains('if (excluindo) return;'));
+      expect(corpo, contains('if (_excluindoId != null) return;'));
+      expect(
+        fonteNormalizada(),
+        contains('onPressed: excluindo ? null : confirmar'),
+      );
+      expect('VacinasStorage.remover('.allMatches(fonte()), hasLength(1));
+    });
+
+    test('3. há saída segura durante a operação de rede', () {
+      final codigo = fonte();
+
+      // Nenhum PopScope segurando a navegação, nos dois lugares.
+      expect(codigo, isNot(contains('PopScope')));
+      expect(codigo, isNot(contains('canPop')));
+
+      // E os dois Cancelar continuam clicáveis durante a operação.
+      final normalizada = fonteNormalizada();
+      expect(
+        normalizada,
+        contains('onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\''),
+      );
+      expect(normalizada, isNot(contains('onPressed: salvando ? null')));
+      expect(
+        normalizada,
+        isNot(contains('onPressed: excluindo ? null : () => Navigator.pop')),
+      );
+    });
+
+    test('4. a operação em voo não é reexecutada ao sair e voltar', () {
+      final codigo = fonte();
+
+      // Sair no meio preserva o id reservado: a próxima tentativa
+      // sobrescreve o mesmo documento em vez de criar outro.
+      expect(
+        fonteNormalizada(),
+        contains('if (_gravando) return; setState(() => _idPendente = null);'),
+      );
+      // E abrir outro formulário durante a gravação é barrado.
+      expect(
+        formulario().indexOf('if (_gravando) return;'),
+        lessThan(formulario().indexOf('VacinasStorage.novoId()')),
+      );
+      expect(codigo, contains('_gravando = true;'));
+      expect(codigo, contains('_gravando = false;'));
+      expect(codigo, contains('_excluindoId = id;'));
+      expect(codigo, contains('_excluindoId = null;'));
+    });
+
+    test('o resultado é aplicado mesmo se a tela já tiver fechado o sheet', () {
+      final codigo = fonte();
+
+      // _registrarSalvo e _registrarRemocao mexem no State, não no sheet, e
+      // se protegem com mounted.
+      for (final metodo in [
+        'void _registrarSalvo(',
+        'void _registrarRemocao(',
+      ]) {
+        expect(corpoDoMetodo(metodo), contains('if (!mounted) return;'),
+            reason: metodo);
+      }
+
+      expect(codigo, contains('_registrarSalvo(gravado);'));
+      expect(codigo, contains('_registrarRemocao(id);'));
+      expect(codigo, contains('if (ctx.mounted) Navigator.pop(ctx);'));
+
+      // Um único ponto que insere e um único que remove do histórico.
+      expect('_historico = lista;'.allMatches(codigo), hasLength(1));
+      expect('removeWhere((r) => r.id == id)'.allMatches(codigo), hasLength(1));
+    });
+
+    test('o id só é liberado quando não há gravação pendente', () {
+      final corpo = formulario();
+
+      final guarda = corpo.indexOf('if (_gravando) return;\n\n    setState');
+      final libera = corpo.indexOf('setState(() => _idPendente = null);');
+
+      expect(libera, greaterThan(-1));
+      expect(guarda, greaterThan(-1));
+      expect(guarda, lessThan(libera));
+    });
+  });
+
+  group('VacinasScreen — identidade da gestação', () {
+    test('a avaliação recebe o id da gestação atual', () {
+      final codigo = fonte();
+
+      expect(codigo, contains('gestacaoId: _gestacaoId'));
+      expect(
+        corpoDoMetodo('void _abrirNovaAvaliacao()'),
+        contains('_gestacaoId = gestacaoAtual.id;'),
+      );
+    });
+
+    test('um registro novo recebe o id da gestação atual', () {
+      expect(
+        fonteNormalizada(),
+        contains(
+          'gestacaoId: edicaoDe != null ? edicaoDe.gestacaoId '
+          ': gestacaoAtual.id',
+        ),
+      );
+    });
+
+    test('a edição preserva o id, inclusive quando é nulo', () {
+      final normalizada = fonteNormalizada();
+
+      // Sem ??: um registro legado não é migrado ao ser editado.
+      expect(normalizada, isNot(contains('edicaoDe?.gestacaoId ??')));
+      expect(normalizada, contains('dumNoRegistro: edicaoDe?.dumNoRegistro'));
+    });
+
+    test('o snapshot temporal e a identidade andam juntos', () {
+      final corpo = corpoDoMetodo('void _abrirNovaAvaliacao()');
+
+      expect(corpo, contains('_avaliadoEm = DateTime.now();'));
+      expect(corpo, contains('_dum = gestacaoAtual.dum;'));
+      expect(corpo, contains('_gestacaoId = gestacaoAtual.id;'));
+    });
+  });
+
+  group('VacinasScreen — registros não reconhecidos', () {
+    String corpoDoBloco() =>
+        corpoDoMetodo('Widget _blocoNaoReconhecidos(');
+
+    test('5. o código desconhecido não é associado a nenhum card', () {
+      // A associação do card é por igualdade exata; um código fora do
+      // calendário nunca casa com status.vacinaCodigo.
+      final daVacina = corpoDoMetodo(
+        'List<RegistroVacinacao> _registrosDaVacina(',
+      );
+
+      expect(daVacina, contains('r.vacinaCodigo == codigo'));
+      expect(daVacina, isNot(contains('contains(')));
+      expect(daVacina, isNot(contains('startsWith')));
+      expect(fonte(), contains('_registrosDaVacina(status.vacinaCodigo)'));
+    });
+
+    test('6. o desconhecido é separado por regraPorCodigo, sem inferência', () {
+      final corpo = corpoDoMetodo(
+        'List<RegistroVacinacao> _registrosNaoReconhecidos(',
+      );
+
+      expect(corpo, contains('regraPorCodigo(r.vacinaCodigo) == null'));
+      expect(corpo, contains('r.id != null'));
+      // Nada de adivinhar vacina, versão ou temporada a partir do código.
+      expect(corpo, isNot(contains('versaoCalendario')));
+      expect(corpo, isNot(contains('startsWith')));
+      expect(corpo, isNot(contains('EstadoVacina')));
+    });
+
+    test('7. _registrosDaVacina continua filtrando por igualdade exata', () {
+      expect(
+        fonteNormalizada(),
+        contains(
+          'return historico .where((r) => r.vacinaCodigo == codigo && '
+          'r.id != null) .toList(growable: false);',
+        ),
+      );
+    });
+
+    test('8. o bloco só entra na lista quando existe órfão', () {
+      final normalizada = fonteNormalizada();
+
+      expect(
+        normalizada,
+        contains(
+          'if (naoReconhecidos.isNotEmpty) _blocoNaoReconhecidos(context, '
+          'naoReconhecidos)',
+        ),
+      );
+      // Depois dos sete cards do calendário.
+      final cards = normalizada.indexOf('...status.map((s) => _cardVacina(');
+      final bloco = normalizada.indexOf('if (naoReconhecidos.isNotEmpty)');
+      expect(cards, greaterThan(-1));
+      expect(bloco, greaterThan(cards));
+    });
+
+    test('9. mostra o código cru, o resumo e a ação de excluir', () {
+      final corpo = corpoDoBloco();
+
+      expect(corpo, contains("'Registros não reconhecidos'"));
+      expect(
+        corpo,
+        contains(
+          'Existem registros que não fazem parte do calendário desta versão.',
+        ),
+      );
+      expect(corpo, contains('registro.vacinaCodigo'));
+      expect(corpo, contains('_resumoDoRegistro(registro)'));
+      expect(corpo, contains("semanticLabel: 'Excluir'"));
+    });
+
+    test('10. o bloco não oferece editar nem registrar', () {
+      final corpo = corpoDoBloco();
+
+      expect(corpo, isNot(contains("'Editar'")));
+      expect(corpo, isNot(contains('_abrirFormulario')));
+      expect(corpo, isNot(contains("'Registrar'")));
+      expect(corpo, isNot(contains('_nomeDaVacina')));
+    });
+
+    test('11. a exclusão reaproveita _excluirRegistro, que remove pelo id', () {
+      expect(
+        fonteNormalizada(),
+        contains('onTap: () => _excluirRegistro(context, registro)'),
+      );
+      // Um único caminho de exclusão para cards e para o bloco.
+      expect(
+        'Future<void> _excluirRegistro('.allMatches(fonte()),
+        hasLength(1),
+      );
+      expect(
+        corpoDoMetodo('Future<void> _excluirRegistro('),
+        contains('await VacinasStorage.remover(id)'),
+      );
+    });
+
+    test('o texto do bloco não faz afirmação clínica', () {
+      final corpo = corpoDoBloco().toLowerCase();
+
+      for (final termo in [
+        'tome',
+        'precisa',
+        'atrasad',
+        'indicada',
+        'obrigat',
+        'urgente',
+        'vacina recomendada',
+      ]) {
+        expect(corpo, isNot(contains(termo)), reason: termo);
+      }
     });
   });
 
@@ -568,13 +880,17 @@ void main() {
       expect(corpo, contains('final id = registro.id;'));
       expect(corpo, contains('if (id == null) return;'));
       expect(corpo, contains('await VacinasStorage.remover(id)'));
-      expect(corpo, contains('removeWhere((r) => r.id == id)'));
+      expect(corpo, contains('_registrarRemocao(id);'));
+      expect(
+        corpoDoMetodo('void _registrarRemocao('),
+        contains('removeWhere((r) => r.id == id)'),
+      );
     });
 
     test('há confirmação explícita em AlertDialog antes de remover', () {
       final corpo = corpoDaExclusao();
 
-      expect(corpo, contains('showDialog<bool>'));
+      expect(corpo, contains('showDialog<void>'));
       expect(corpo, contains('AlertDialog'));
       expect(corpo, contains("'Excluir registro?'"));
       expect(
@@ -597,7 +913,7 @@ void main() {
 
       expect(
         fonteNormalizada(),
-        contains('onPressed: excluindo ? null : () => Navigator.pop(ctx, false)'),
+        contains('onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\''),
       );
       // O remover está dentro de confirmar(), que é o onPressed do Excluir.
       expect(corpo, contains('onPressed: excluindo ? null : confirmar'));
@@ -611,11 +927,15 @@ void main() {
       final corpo = corpoDaExclusao();
 
       expect(corpo, contains('if (removeu == true)'));
-      expect(corpo, contains('if (!mounted || confirmado != true) return;'));
 
       final remove = corpo.indexOf('await VacinasStorage.remover(id)');
-      final tiraDaLista = corpo.indexOf('removeWhere((r) => r.id == id)');
+      final tiraDaLista = corpo.indexOf('_registrarRemocao(id);');
       expect(tiraDaLista, greaterThan(remove));
+      // A remoção local só existe dentro de _registrarRemocao.
+      expect(
+        'removeWhere((r) => r.id == id)'.allMatches(fonte()),
+        hasLength(1),
+      );
     });
 
     test('falha e recusa mantêm o histórico intacto', () {
@@ -623,8 +943,9 @@ void main() {
 
       expect(corpo, contains('FirestoreErro.mensagemAmigavel(falha)'));
       expect(corpo, contains('excluindo = false;'));
-      // Um único ponto que mexe no histórico, e ele exige a confirmação.
-      expect('_historico ='.allMatches(corpo), hasLength(1));
+      // O método não toca no histórico: quem mexe é _registrarRemocao, e só
+      // depois de remover() devolver true.
+      expect(corpo, isNot(contains('_historico =')));
       // false não é sucesso: cai no mesmo ramo do erro.
       expect(corpo, contains('sessão expirada'));
     });
@@ -632,7 +953,10 @@ void main() {
     test('após o sucesso a engine reavalia pelo mecanismo existente', () {
       final corpo = corpoDaExclusao();
 
-      expect(corpo, contains('_abrirNovaAvaliacao();'));
+      expect(
+        corpoDoMetodo('void _registrarRemocao('),
+        contains('_abrirNovaAvaliacao();'),
+      );
       expect(corpo, isNot(contains('EstadoVacina')));
       expect(corpo, isNot(contains('VacinasEngine')));
       expect(corpo, isNot(contains('podeRegistrar')));
@@ -643,7 +967,8 @@ void main() {
 
       expect(corpo, contains('if (excluindo) return;'));
       expect(corpo, contains('excluindo = true;'));
-      expect(corpo, contains('canPop: !excluindo'));
+      expect(corpo, contains('if (_excluindoId != null) return;'));
+      expect(corpo, isNot(contains('canPop')));
     });
 
     test('as três ações coexistem, cada uma no seu ponto', () {

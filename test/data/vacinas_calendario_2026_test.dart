@@ -236,6 +236,82 @@ void main() {
       expect(influenza.dosesPorGestacao, isNull);
     });
 
+    test('contrato: os códigos são estáveis entre versões do PNI', () {
+      // Política do projeto: uma nova versão pode mudar parâmetros de uma
+      // regra, mas nunca renomeia um código. Se alguém renomear, este teste
+      // quebra de propósito — registros antigos ficariam órfãos.
+      expect(calendarioPni2026.map((r) => r.codigo).toList(), [
+        'HEPATITE_B',
+        'DT',
+        'INFLUENZA',
+        'COVID_19',
+        'DTPA',
+        'VSR',
+        'FEBRE_AMARELA',
+      ]);
+    });
+
+    test('contrato: nenhum código é vazio e não há duplicados', () {
+      final codigos = calendarioPni2026.map((r) => r.codigo).toList();
+
+      expect(codigos.toSet(), hasLength(codigos.length));
+      for (final codigo in codigos) {
+        expect(codigo.trim(), isNotEmpty);
+        expect(codigo.trim(), codigo);
+      }
+    });
+
+    test('uma regra descontinuada continua sendo achada pelo código', () {
+      // regraPorCodigo compara só o código, sem olhar o tipo da regra: uma
+      // regra descontinuada presente na lista é encontrada como qualquer
+      // outra, e por isso não vira registro órfão.
+      for (final regra in calendarioPni2026) {
+        expect(regraPorCodigo(regra.codigo), same(regra), reason: regra.codigo);
+      }
+
+      final corpo = File('lib/data/vacinas_calendario_2026.dart')
+          .readAsLinesSync()
+          .skipWhile((l) => !l.startsWith('RegraCalendario? regraPorCodigo'))
+          .takeWhile((l) => l != '}')
+          .join('\n');
+
+      expect(corpo, contains('regra.codigo == codigo'));
+      expect(corpo, isNot(contains(' is ')));
+      expect(corpo, isNot(contains('Descontinuada')));
+    });
+
+    test('a regra descontinuada declara o mínimo e não abre janela', () {
+      const descontinuada = RegraDescontinuada(
+        codigo: 'VACINA_DESCONTINUADA_DE_TESTE',
+        nomeExibicao: 'Descontinuada de teste',
+        versaoCalendario: versaoCalendarioPni2026,
+      );
+
+      expect(descontinuada.exigeAvaliacaoProfissional, isFalse);
+      expect(descontinuada.parametrosCompletos, isTrue);
+      expect(descontinuada.categoria, CategoriaVacina.excepcional);
+      expect(descontinuada.dosesPorGestacao, isNull);
+      expect(descontinuada.composicao, isEmpty);
+      expect(descontinuada, isNot(isA<RegraJanelaSemana>()));
+      expect(descontinuada, isNot(isA<RegraAvaliacaoProfissional>()));
+    });
+
+    test('a descontinuada pode declarar composição, como qualquer regra', () {
+      const comComponentes = RegraDescontinuada(
+        codigo: 'DESCONTINUADA_COM_COMPONENTES',
+        nomeExibicao: 'Descontinuada com componentes',
+        versaoCalendario: versaoCalendarioPni2026,
+        composicao: {ComponenteVacinal.difterico, ComponenteVacinal.tetanico},
+      );
+
+      // Deixar de ser recomendada não apaga o que a dose continha.
+      expect(comComponentes.composicao, hasLength(2));
+    });
+
+    test('nesta versão nenhuma das sete vacinas está descontinuada', () {
+      expect(calendarioPni2026.whereType<RegraDescontinuada>(), isEmpty);
+    });
+
     test('a versão declara explicitamente a temporada de influenza', () {
       expect(temporadaInfluenzaPni2026, '2026');
       expect(temporadaInfluenzaPni2026, isNotEmpty);
@@ -322,6 +398,7 @@ void main() {
             expect(regra.categoria, CategoriaVacina.janelaAutomatica,
                 reason: regra.codigo);
           case RegraAvaliacaoProfissional():
+          case RegraDescontinuada():
             expect(regra.categoria, CategoriaVacina.excepcional,
                 reason: regra.codigo);
           case RegraDependeHistorico():
@@ -366,6 +443,7 @@ void main() {
                 reason: regra.codigo);
           case RegraJanelaSemana():
           case RegraAvaliacaoProfissional():
+          case RegraDescontinuada():
             break;
         }
       }

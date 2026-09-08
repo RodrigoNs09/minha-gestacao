@@ -48,7 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       dum = _dppEscolhida!.subtract(const Duration(days: 280));
     }
 
-    atualizarDUM(dum);
+    iniciarGestacao(dum);
     await GestacaoStorage.salvarDUM(dum);
 
     if (!mounted) return;
@@ -81,10 +81,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: selecionado ? AppColors.statPurple(context) : AppColors.surface(context),
+          color: selecionado
+              ? AppColors.statPurple(context)
+              : AppColors.surface(context),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selecionado ? AppTheme.primaryPurple : AppColors.border(context),
+            color: selecionado
+                ? AppTheme.primaryPurple
+                : AppColors.border(context),
             width: selecionado ? 1.5 : 0.5,
           ),
         ),
@@ -94,19 +98,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: selecionado ? AppTheme.primaryPurple : AppColors.statPurple(context),
+                color: selecionado
+                    ? AppTheme.primaryPurple
+                    : AppColors.statPurple(context),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(icon, color: selecionado ? Colors.white : AppTheme.primaryPurple, size: 20),
+              child: Icon(
+                icon,
+                color: selecionado ? Colors.white : AppTheme.primaryPurple,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary(context),
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitulo, style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context))),
+                  Text(
+                    subtitulo,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary(context),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -127,31 +150,60 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
         child: Column(
           children: [
-            Text('Você está de quantas semanas?',
-                style: TextStyle(fontSize: 12, color: AppColors.accentText(context), fontWeight: FontWeight.w500)),
+            Text(
+              'Você está de quantas semanas?',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.accentText(context),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  onPressed: () => setState(() => _semanasInformadas = (_semanasInformadas - 1).clamp(1, 42)),
-                  icon: Icon(Icons.remove_circle_outline_rounded, color: AppTheme.primaryPurple),
+                  onPressed: () => setState(
+                    () => _semanasInformadas = (_semanasInformadas - 1).clamp(
+                      1,
+                      42,
+                    ),
+                  ),
+                  icon: Icon(
+                    Icons.remove_circle_outline_rounded,
+                    color: AppTheme.primaryPurple,
+                  ),
                 ),
                 SizedBox(
                   width: 60,
                   child: Text(
                     '$_semanasInformadas',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: AppColors.accentText(context)),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accentText(context),
+                    ),
                   ),
                 ),
                 IconButton(
-                  onPressed: () => setState(() => _semanasInformadas = (_semanasInformadas + 1).clamp(1, 42)),
-                  icon: Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryPurple),
+                  onPressed: () => setState(
+                    () => _semanasInformadas = (_semanasInformadas + 1).clamp(
+                      1,
+                      42,
+                    ),
+                  ),
+                  icon: Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: AppTheme.primaryPurple,
+                  ),
                 ),
               ],
             ),
-            Text('semanas', style: TextStyle(fontSize: 11, color: AppColors.accent(context))),
+            Text(
+              'semanas',
+              style: TextStyle(fontSize: 11, color: AppColors.accent(context)),
+            ),
           ],
         ),
       );
@@ -168,22 +220,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: AppColors.statPurple(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: _dppEscolhida != null ? AppTheme.primaryPurple : AppTheme.primaryPurple.withOpacity(0.2),
+                color: _dppEscolhida != null
+                    ? AppTheme.primaryPurple
+                    : AppTheme.primaryPurple.withOpacity(0.2),
                 width: _dppEscolhida != null ? 1.5 : 1,
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primaryPurple),
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 18,
+                  color: AppTheme.primaryPurple,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   _dppEscolhida == null
                       ? 'Selecionar data prevista do parto'
                       : '${_dppEscolhida!.day.toString().padLeft(2, '0')}/'
-                        '${_dppEscolhida!.month.toString().padLeft(2, '0')}/'
-                        '${_dppEscolhida!.year}',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context)),
+                            '${_dppEscolhida!.month.toString().padLeft(2, '0')}/'
+                            '${_dppEscolhida!.year}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary(context),
+                  ),
                 ),
               ],
             ),
@@ -205,7 +267,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           decoration: BoxDecoration(
             color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
+            border: Border.all(
+              color: AppColors.borderStrong(context),
+              width: 0.5,
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
@@ -217,22 +282,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF534AB7), Color(0xFF7F77DD)]),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF534AB7), Color(0xFF7F77DD)],
+                    ),
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(child: Text('🤱', style: TextStyle(fontSize: 32))),
+                  child: const Center(
+                    child: Text('🤱', style: TextStyle(fontSize: 32)),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   'Bem-vinda ao\nMinha Gestação',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: AppColors.textPrimary(context), height: 1.3),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary(context),
+                    height: 1.3,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Como você prefere nos contar em que fase da gestação está?',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary(context), height: 1.5),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary(context),
+                    height: 1.5,
+                  ),
                 ),
                 const SizedBox(height: 28),
 
@@ -262,15 +340,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       backgroundColor: AppTheme.primaryPurple,
                       disabledBackgroundColor: AppColors.textMuted(context),
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                    child: const Text('Continuar', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Continuar',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: _pular,
-                  child: Text('Não sei, configurar depois', style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
+                  child: Text(
+                    'Não sei, configurar depois',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted(context),
+                    ),
+                  ),
                 ),
               ],
             ),

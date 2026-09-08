@@ -665,6 +665,80 @@ void main() {
     });
   });
 
+  group('gestacaoId', () {
+    test('sobrevive à ida e volta', () {
+      final lido = RegistroVacinacao.fromMap(
+        const RegistroVacinacao(
+          vacinaCodigo: 'dtpa',
+          situacaoInformada: SituacaoInformada.aplicadaComData,
+          versaoCalendario: 'PNI-2026',
+          gestacaoId: 'gestacao-abc',
+        ).toMap(),
+      );
+
+      expect(lido.gestacaoId, 'gestacao-abc');
+    });
+
+    test('registro antigo sem o campo desserializa normalmente', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'dtpa',
+        'situacaoInformada': 'APLICADA_COM_DATA',
+        'versaoCalendario': 'PNI-2026',
+        'dumNoRegistro': '2026-01-05T00:00:00.000',
+      });
+
+      expect(registro.gestacaoId, isNull);
+      expect(registro.vacinaCodigo, 'dtpa');
+      expect(registro.dumNoRegistro, DateTime(2026, 1, 5));
+    });
+
+    test('nulo é omitido do mapa, não gravado como null', () {
+      final mapa = const RegistroVacinacao(
+        vacinaCodigo: 'dtpa',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+      ).toMap();
+
+      expect(mapa.containsKey('gestacaoId'), isFalse);
+    });
+
+    test('tipo inesperado não vira identidade', () {
+      final registro = RegistroVacinacao.fromMap(const {
+        'vacinaCodigo': 'dtpa',
+        'gestacaoId': 42,
+      });
+
+      expect(registro.gestacaoId, isNull);
+    });
+
+    test('comId preserva a identidade da gestação', () {
+      final comId = const RegistroVacinacao(
+        vacinaCodigo: 'dtpa',
+        situacaoInformada: SituacaoInformada.aplicadaComData,
+        versaoCalendario: 'PNI-2026',
+        gestacaoId: 'gestacao-abc',
+      ).comId('doc-1');
+
+      expect(comId.id, 'doc-1');
+      expect(comId.gestacaoId, 'gestacao-abc');
+    });
+
+    test('convive com dumNoRegistro, sem substituí-lo', () {
+      final lido = RegistroVacinacao.fromMap(
+        RegistroVacinacao(
+          vacinaCodigo: 'dtpa',
+          situacaoInformada: SituacaoInformada.aplicadaComData,
+          versaoCalendario: 'PNI-2026',
+          gestacaoId: 'gestacao-abc',
+          dumNoRegistro: DateTime(2026, 1, 5),
+        ).toMap(),
+      );
+
+      expect(lido.gestacaoId, 'gestacao-abc');
+      expect(lido.dumNoRegistro, DateTime(2026, 1, 5));
+    });
+  });
+
   group('RegistroVacinacao.comId', () {
     test('anexa o id sem alterar os demais campos', () {
       final original = registroCompleto();

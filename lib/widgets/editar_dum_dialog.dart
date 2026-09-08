@@ -1,13 +1,32 @@
 import 'package:flutter/material.dart';
 import '../data/gestacao_data.dart';
 import '../services/gestacao_storage.dart';
+import '../services/vacinas_engine.dart' show adicionarDias;
 import '../theme/app_theme.dart';
 
 enum _ModoInformar { semanas, dpp }
 
-Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async {
+DateTime dumAoConfirmarSemanas({
+  required int semanasInformadas,
+  required int semanasIniciais,
+  required DateTime dumAtual,
+  required DateTime hoje,
+}) {
+  // adicionarDias(x, 0) é a data civil de x, pela mesma fonte única.
+  if (semanasInformadas == semanasIniciais) return adicionarDias(dumAtual, 0);
+
+  return adicionarDias(hoje, -semanasInformadas * 7);
+}
+
+DateTime dumAoConfirmarDpp(DateTime dpp) => adicionarDias(dpp, -280);
+
+Future<void> mostrarEditarDUM(
+  BuildContext context,
+  VoidCallback aoSalvar,
+) async {
   _ModoInformar modo = _ModoInformar.semanas;
-  int semanasInformadas = gestacaoAtual.semanaAtual;
+  final int semanasIniciais = gestacaoAtual.semanaAtual;
+  int semanasInformadas = semanasIniciais;
   DateTime? dppEscolhida;
 
   final resultado = await showModalBottomSheet<bool>(
@@ -52,10 +71,14 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                 padding: const EdgeInsets.all(14),
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
-                  color: selecionado ? AppColors.statPurple(ctx) : AppColors.surface(ctx),
+                  color: selecionado
+                      ? AppColors.statPurple(ctx)
+                      : AppColors.surface(ctx),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: selecionado ? AppTheme.primaryPurple : AppColors.border(ctx),
+                    color: selecionado
+                        ? AppTheme.primaryPurple
+                        : AppColors.border(ctx),
                     width: selecionado ? 1.5 : 0.5,
                   ),
                 ),
@@ -65,18 +88,39 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: selecionado ? AppTheme.primaryPurple : AppColors.statPurple(ctx),
+                        color: selecionado
+                            ? AppTheme.primaryPurple
+                            : AppColors.statPurple(ctx),
                         borderRadius: BorderRadius.circular(11),
                       ),
-                      child: Icon(icon, color: selecionado ? Colors.white : AppTheme.primaryPurple, size: 18),
+                      child: Icon(
+                        icon,
+                        color: selecionado
+                            ? Colors.white
+                            : AppTheme.primaryPurple,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(titulo, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary(ctx))),
-                          Text(subtitulo, style: TextStyle(fontSize: 10, color: AppColors.textSecondary(ctx))),
+                          Text(
+                            titulo,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary(ctx),
+                            ),
+                          ),
+                          Text(
+                            subtitulo,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textSecondary(ctx),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -97,29 +141,49 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                 ),
                 child: Column(
                   children: [
-                    Text('Semana atual',
-                        style: TextStyle(fontSize: 11, color: AppColors.accentText(ctx), fontWeight: FontWeight.w500)),
+                    Text(
+                      'Semana atual',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.accentText(ctx),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
                           onPressed: () => setModalState(
-                              () => semanasInformadas = (semanasInformadas - 1).clamp(1, 42)),
-                          icon: Icon(Icons.remove_circle_outline_rounded, color: AppTheme.primaryPurple),
+                            () => semanasInformadas = (semanasInformadas - 1)
+                                .clamp(1, 42),
+                          ),
+                          icon: Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppTheme.primaryPurple,
+                          ),
                         ),
                         SizedBox(
                           width: 56,
                           child: Text(
                             '$semanasInformadas',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: AppColors.accentText(ctx)),
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.accentText(ctx),
+                            ),
                           ),
                         ),
                         IconButton(
                           onPressed: () => setModalState(
-                              () => semanasInformadas = (semanasInformadas + 1).clamp(1, 42)),
-                          icon: Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryPurple),
+                            () => semanasInformadas = (semanasInformadas + 1)
+                                .clamp(1, 42),
+                          ),
+                          icon: Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppTheme.primaryPurple,
+                          ),
                         ),
                       ],
                     ),
@@ -140,20 +204,30 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                     color: AppColors.statPurple(ctx),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: dppEscolhida != null ? AppTheme.primaryPurple : AppTheme.primaryPurple.withOpacity(0.2),
+                      color: dppEscolhida != null
+                          ? AppTheme.primaryPurple
+                          : AppTheme.primaryPurple.withOpacity(0.2),
                       width: dppEscolhida != null ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.calendar_today_rounded, size: 16, color: AppTheme.primaryPurple),
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 16,
+                        color: AppTheme.primaryPurple,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         dppEscolhida == null
                             ? 'Selecionar data prevista'
                             : '${dppEscolhida!.day.toString().padLeft(2, '0')}/${dppEscolhida!.month.toString().padLeft(2, '0')}/${dppEscolhida!.year}',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary(ctx)),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimary(ctx),
+                        ),
                       ),
                     ],
                   ),
@@ -171,7 +245,9 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
             ),
             decoration: BoxDecoration(
               color: AppColors.surface(ctx),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -190,12 +266,19 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                 ),
                 Text(
                   'Editar progresso da gestação',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.textPrimary(ctx)),
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary(ctx),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Como você prefere informar?',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary(ctx)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary(ctx),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -222,22 +305,34 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: AppColors.border(ctx)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
-                        child: Text('Cancelar', style: TextStyle(color: AppColors.textPrimary(ctx))),
+                        child: Text(
+                          'Cancelar',
+                          style: TextStyle(color: AppColors.textPrimary(ctx)),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: podeConfirmar() ? () => Navigator.pop(ctx, true) : null,
+                        onPressed: podeConfirmar()
+                            ? () => Navigator.pop(ctx, true)
+                            : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryPurple,
                           disabledBackgroundColor: AppColors.textMuted(ctx),
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
-                        child: const Text('Salvar', style: TextStyle(color: Colors.white)),
+                        child: const Text(
+                          'Salvar',
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ),
                   ],
@@ -254,9 +349,14 @@ Future<void> mostrarEditarDUM(BuildContext context, VoidCallback aoSalvar) async
     DateTime novaDum;
 
     if (modo == _ModoInformar.semanas) {
-      novaDum = DateTime.now().subtract(Duration(days: semanasInformadas * 7));
+      novaDum = dumAoConfirmarSemanas(
+        semanasInformadas: semanasInformadas,
+        semanasIniciais: semanasIniciais,
+        dumAtual: gestacaoAtual.dum,
+        hoje: DateTime.now(),
+      );
     } else {
-      novaDum = dppEscolhida!.subtract(const Duration(days: 280));
+      novaDum = dumAoConfirmarDpp(dppEscolhida!);
     }
 
     atualizarDUM(novaDum);

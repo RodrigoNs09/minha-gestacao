@@ -8,7 +8,6 @@ import 'package:suacontracao_ai/services/vacinas_engine.dart';
 import 'package:suacontracao_ai/theme/app_theme.dart';
 
 void main() {
-  // Só o código executável interessa nas inspeções de fonte.
   List<String> linhasDeCodigo() {
     return File('lib/data/vacinas_ui.dart')
         .readAsLinesSync()
@@ -68,7 +67,6 @@ void main() {
         ),
       };
 
-      // O mapa cobre o enum inteiro, sem estado de fora nem estado a mais.
       expect(esperado.keys.toSet(), EstadoVacina.values.toSet());
 
       esperado.forEach((estado, referencia) {
@@ -154,8 +152,6 @@ void main() {
         mensagemDoseRegistrada,
       ];
 
-      // A mensagem clínica continua vindo de StatusVacinacao.mensagem; o
-      // rótulo é só a etiqueta do chip.
       for (final estado in EstadoVacina.values) {
         expect(mensagens, isNot(contains(apresentacaoDe(estado).rotulo)),
             reason: estado.codigo);
@@ -175,8 +171,6 @@ void main() {
     });
 
     test('o estado é decidido sem BuildContext em tempo de execução', () {
-      // Nenhuma chamada deste arquivo passa contexto: a cor resolvida
-      // depois é escolha do widget, não deste mapeamento.
       for (final estado in EstadoVacina.values) {
         expect(() => apresentacaoDe(estado), returnsNormally);
       }
@@ -227,7 +221,6 @@ void main() {
       final codigo = linhasDeCodigo().join('\n');
 
       expect(codigo, isNot(contains('Color(0x')));
-      // \b impede que AppColors.statGreen seja lido como Colors.statGreen.
       expect(codigo, isNot(matches(RegExp(r'\bColors\.'))));
       expect(codigo, isNot(contains('DateTime')));
       expect(codigo, isNot(contains('Duration')));

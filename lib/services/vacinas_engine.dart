@@ -4,7 +4,6 @@ import '../data/vacinas_calendario_2026.dart';
 import '../models/registro_vacinacao.dart';
 
 enum EstadoVacina {
-
   naoDisponivel('NAO_DISPONIVEL'),
 
   periodoRecomendado('PERIODO_RECOMENDADO'),
@@ -24,7 +23,6 @@ enum EstadoVacina {
 }
 
 enum NivelAtencao {
-
   nenhum('NENHUM'),
 
   informativo('INFORMATIVO'),
@@ -73,6 +71,7 @@ final class ProximaJanela {
   @override
   String toString() => 'semana $semanaGestacional ($dataEstimada)';
 }
+
 final class StatusVacinacao {
   final String vacinaCodigo;
   final EstadoVacina estado;
@@ -111,6 +110,10 @@ const String mensagemGestacaoIndeterminada =
     'Não foi possível determinar a idade gestacional a partir da data '
     'informada. Confirme as orientações com a equipe de saúde.';
 
+const String mensagemNaoIndicada =
+    'Esta vacina não faz parte das recomendações desta versão do Calendário '
+    'Nacional de Vacinação. Confirme as orientações com a equipe de saúde.';
+
 const String mensagemAvaliacaoProfissional =
     'Esta vacina depende de avaliação da equipe de saúde para a sua '
     'situação.';
@@ -128,6 +131,16 @@ const String mensagemAguardarRecomendado =
     'o intervalo recomendado ainda não. Confirme as orientações com a equipe '
     'de saúde.';
 
+int diasDeCalendarioEntre(DateTime de, DateTime ate) {
+  final inicio = DateTime.utc(de.year, de.month, de.day);
+  final fim = DateTime.utc(ate.year, ate.month, ate.day);
+
+  return fim.difference(inicio).inDays;
+}
+
+DateTime adicionarDias(DateTime data, int dias) =>
+    DateTime(data.year, data.month, data.day + dias);
+
 DateTime adicionarMeses(DateTime data, int meses) {
   final totalMeses = data.month - 1 + meses;
   final ano = data.year + (totalMeses ~/ 12);
@@ -139,6 +152,8 @@ DateTime adicionarMeses(DateTime data, int meses) {
   return DateTime(ano, mes, dia);
 }
 
+const int toleranciaDumLegadaEmDias = 42;
+
 const int diasGestacaoMinimoPlausivel = 0;
 
 const int diasGestacaoMaximoPlausivel = 294;
@@ -146,7 +161,6 @@ const int diasGestacaoMaximoPlausivel = 294;
 bool gestacaoPlausivel(int diasGestacaoBruto) =>
     diasGestacaoBruto >= diasGestacaoMinimoPlausivel &&
     diasGestacaoBruto <= diasGestacaoMaximoPlausivel;
-
 
 int semanaGestacionalDe(int diasGestacaoBruto) => diasGestacaoBruto ~/ 7;
 
@@ -159,6 +173,7 @@ class VacinasEngine {
     required List<RegistroVacinacao> historico,
     required List<RegraCalendario> calendario,
     String? temporadaInfluenza,
+    String? gestacaoId,
   }) {
     return [
       for (final regra in calendario)
@@ -170,6 +185,7 @@ class VacinasEngine {
           historico: historico,
           temporadaInfluenza: temporadaInfluenza,
           calendario: calendario,
+          gestacaoId: gestacaoId,
         ),
     ];
   }
@@ -182,8 +198,8 @@ class VacinasEngine {
     required List<RegistroVacinacao> historico,
     required String? temporadaInfluenza,
     required List<RegraCalendario> calendario,
+    required String? gestacaoId,
   }) {
-    
     switch (regra) {
       case RegraAvaliacaoProfissional():
         return StatusVacinacao(
@@ -192,7 +208,19 @@ class VacinasEngine {
           mensagem: mensagemAvaliacaoProfissional,
           nivelAtencao: nivelDoEstado(EstadoVacina.avaliacaoProfissional),
           podeRegistrar: true,
-          motivo: 'regra excepcional: indicação depende de avaliação profissional',
+          motivo:
+              'regra excepcional: indicação depende de avaliação profissional',
+        );
+
+      case RegraDescontinuada():
+
+        return StatusVacinacao(
+          vacinaCodigo: regra.codigo,
+          estado: EstadoVacina.naoIndicada,
+          mensagem: mensagemNaoIndicada,
+          nivelAtencao: nivelDoEstado(EstadoVacina.naoIndicada),
+          podeRegistrar: false,
+          motivo: 'regra descontinuada nesta versão do calendário',
         );
 
       case RegraJanelaSemana():
@@ -202,6 +230,7 @@ class VacinasEngine {
           dum: dum,
           dataAtual: dataAtual,
           historico: historico,
+          gestacaoId: gestacaoId,
         );
 
       case RegraDependeIntervaloUltimaDose():
@@ -210,6 +239,7 @@ class VacinasEngine {
           dum: dum,
           dataAtual: dataAtual,
           historico: historico,
+          gestacaoId: gestacaoId,
         );
 
       case RegraDependeTemporada():
@@ -255,7 +285,9 @@ class VacinasEngine {
       return 'há dose declarada sem posição no esquema';
     }
 
-    final numeros = aplicadas.map((r) => r.numeroDaDose!).toList(growable: false);
+    final numeros = aplicadas
+        .map((r) => r.numeroDaDose!)
+        .toList(growable: false);
 
     if (numeros.any((n) => n < 1 || n > dosesDoEsquema)) {
       return 'há dose com posição fora de 1..$dosesDoEsquema';
@@ -301,7 +333,9 @@ class VacinasEngine {
     return semanaGestacionalDe(diasGestacaoBruto) >= regraDaDose.semanaInicial;
   }
 
-  static String? _duplicidadeEntreOutrasVacinas(List<RegistroVacinacao> outras) {
+  static String? _duplicidadeEntreOutrasVacinas(
+    List<RegistroVacinacao> outras,
+  ) {
     final vistas = <String>{};
 
     for (final dose in outras) {
@@ -339,11 +373,12 @@ class VacinasEngine {
       return _verificar(regra, 'regra sem doses de esquema básico declaradas');
     }
 
-    // Sem componentes declarados, containsAll seria verdadeiro para toda
-    // regra do calendário e qualquer vacina contaria como dose desta.
     if (regra.componentesDoIntervalo.isEmpty) {
-      return _verificar(regra, 'regra sem componentes declarados para o '
-          'intervalo desde a última dose');
+      return _verificar(
+        regra,
+        'regra sem componentes declarados para o '
+        'intervalo desde a última dose',
+      );
     }
 
     final codigosRelevantes = calendario
@@ -353,16 +388,24 @@ class VacinasEngine {
 
     final relevantes = historico
         .where((r) => codigosRelevantes.contains(r.vacinaCodigo))
-        .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
+        .where(
+          (r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado,
+        )
         .toList(growable: false);
 
     if (relevantes.any((r) => _dataNoFuturo(r, dataAtual))) {
-      return _verificar(regra, 'há registro relevante com data de aplicação '
-          'no futuro');
+      return _verificar(
+        regra,
+        'há registro relevante com data de aplicação '
+        'no futuro',
+      );
     }
 
     if (relevantes.any(_temSituacaoIndeterminada)) {
-      return _verificar(regra, 'há registro relevante sem situação determinada');
+      return _verificar(
+        regra,
+        'há registro relevante sem situação determinada',
+      );
     }
 
     final aplicadas = relevantes
@@ -370,35 +413,45 @@ class VacinasEngine {
         .toList(growable: false);
 
     if (aplicadas.isEmpty) {
-      return _verificar(regra, 'sem dose relevante registrada para determinar o '
-          'esquema');
+      return _verificar(
+        regra,
+        'sem dose relevante registrada para determinar o '
+        'esquema',
+      );
     }
 
-    final proprias =
-        aplicadas.where((r) => r.vacinaCodigo == regra.codigo).toList(growable: false);
-    final outras =
-        aplicadas.where((r) => r.vacinaCodigo != regra.codigo).toList(growable: false);
+    final proprias = aplicadas
+        .where((r) => r.vacinaCodigo == regra.codigo)
+        .toList(growable: false);
+    final outras = aplicadas
+        .where((r) => r.vacinaCodigo != regra.codigo)
+        .toList(growable: false);
 
-    final inconsistencia =
-        _inconsistenciaDeNumeracao(proprias, regra.dosesDoEsquemaBasico);
+    final inconsistencia = _inconsistenciaDeNumeracao(
+      proprias,
+      regra.dosesDoEsquemaBasico,
+    );
     if (inconsistencia != null) return _verificar(regra, inconsistencia);
 
     if (proprias.isEmpty) {
       final porCodigo = {for (final r in calendario) r.codigo: r};
 
-      final semPosicao = outras.any((dose) => !_podeAbrirOEsquema(
-            regraDaDose: porCodigo[dose.vacinaCodigo],
-            diasGestacaoBruto: diasGestacaoBruto,
-          ));
+      final semPosicao = outras.any(
+        (dose) => !_podeAbrirOEsquema(
+          regraDaDose: porCodigo[dose.vacinaCodigo],
+          diasGestacaoBruto: diasGestacaoBruto,
+        ),
+      );
 
       if (semPosicao) {
-        return _verificar(regra, 'sem dose desta vacina e sem contexto '
-            'gestacional para posicionar a dose de outra vacina no esquema');
+        return _verificar(
+          regra,
+          'sem dose desta vacina e sem contexto '
+          'gestacional para posicionar a dose de outra vacina no esquema',
+        );
       }
     }
 
-    // Doses de outras vacinas não têm numeroDaDose para distingui-las, então
-    // só ocupam posição enquanto forem distinguíveis entre si.
     if (proprias.length < regra.dosesDoEsquemaBasico) {
       final duplicidade = _duplicidadeEntreOutrasVacinas(outras);
       if (duplicidade != null) return _verificar(regra, duplicidade);
@@ -412,8 +465,11 @@ class VacinasEngine {
 
     if (totalDoEsquema >= regra.dosesDoEsquemaBasico) {
       if (_temDoseNoFuturo(aplicadas, dataAtual)) {
-        return _verificar(regra, 'há dose relevante com data no futuro: o '
-            'esquema não pode ser dado como completo');
+        return _verificar(
+          regra,
+          'há dose relevante com data no futuro: o '
+          'esquema não pode ser dado como completo',
+        );
       }
 
       final deOutras = totalDoEsquema - proprias.length;
@@ -423,15 +479,19 @@ class VacinasEngine {
         mensagem: mensagemDoseRegistrada,
         nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
         podeRegistrar: false,
-        motivo: 'esquema de ${regra.dosesDoEsquemaBasico} doses completo: '
+        motivo:
+            'esquema de ${regra.dosesDoEsquemaBasico} doses completo: '
             '${proprias.length} de ${regra.codigo} e $deOutras de outra vacina '
             'com os componentes',
       );
     }
 
     if (aplicadas.any((r) => r.dataAplicacao == null)) {
-      return _verificar(regra, 'há dose relevante sem data: intervalo não '
-          'verificável');
+      return _verificar(
+        regra,
+        'há dose relevante sem data: intervalo não '
+        'verificável',
+      );
     }
 
     final ultima = aplicadas
@@ -443,7 +503,8 @@ class VacinasEngine {
 
     if (!_naoPosteriorA(liberacao, dataAtual)) {
       final excepcional = regra.intervaloMinimoExcepcionalDesdeUltimaDose;
-      final minimoCumprido = excepcional != null &&
+      final minimoCumprido =
+          excepcional != null &&
           _naoPosteriorA(_somarIntervalo(ultima, excepcional), dataAtual);
 
       return StatusVacinacao(
@@ -456,10 +517,10 @@ class VacinasEngine {
         podeRegistrar: true,
         motivo: minimoCumprido
             ? 'dose ${totalDoEsquema + 1}: mínimo excepcional de $excepcional '
-                'cumprido desde ${_soData(ultima)}, recomendado de $recomendado '
-                'completa em ${_soData(liberacao)}'
+                  'cumprido desde ${_soData(ultima)}, recomendado de $recomendado '
+                  'completa em ${_soData(liberacao)}'
             : 'dose ${totalDoEsquema + 1}: intervalo recomendado de $recomendado '
-                'desde ${_soData(ultima)} completa em ${_soData(liberacao)}',
+                  'desde ${_soData(ultima)} completa em ${_soData(liberacao)}',
       );
     }
 
@@ -469,7 +530,8 @@ class VacinasEngine {
       mensagem: mensagemPeriodoRecomendado,
       nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
       podeRegistrar: true,
-      motivo: 'dose ${totalDoEsquema + 1} de ${regra.dosesDoEsquemaBasico}: '
+      motivo:
+          'dose ${totalDoEsquema + 1} de ${regra.dosesDoEsquemaBasico}: '
           'intervalo recomendado cumprido desde ${_soData(ultima)}',
     );
   }
@@ -487,12 +549,16 @@ class VacinasEngine {
 
     final relevantes = historico
         .where((r) => r.vacinaCodigo == regra.codigo)
-        .where((r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado)
+        .where(
+          (r) => r.situacaoInformada != SituacaoInformada.naoAplicadaInformado,
+        )
         .toList(growable: false);
 
     if (relevantes.any((r) => _dataNoFuturo(r, dataAtual))) {
-      return verificar('há registro desta vacina com data de aplicação no '
-          'futuro');
+      return verificar(
+        'há registro desta vacina com data de aplicação no '
+        'futuro',
+      );
     }
 
     if (relevantes.any(_temSituacaoIndeterminada)) {
@@ -507,17 +573,23 @@ class VacinasEngine {
       return verificar('sem dose registrada para determinar o esquema');
     }
 
-    final inconsistencia =
-        _inconsistenciaDeNumeracao(aplicadas, regra.dosesDoEsquemaBasico);
+    final inconsistencia = _inconsistenciaDeNumeracao(
+      aplicadas,
+      regra.dosesDoEsquemaBasico,
+    );
     if (inconsistencia != null) return verificar(inconsistencia);
 
-    final numeros = aplicadas.map((r) => r.numeroDaDose!).toList(growable: false);
+    final numeros = aplicadas
+        .map((r) => r.numeroDaDose!)
+        .toList(growable: false);
     final porNumero = {for (final r in aplicadas) r.numeroDaDose!: r};
 
     if (numeros.length >= regra.dosesDoEsquemaBasico) {
       if (_temDoseNoFuturo(aplicadas, dataAtual)) {
-        return verificar('há dose com data no futuro: o esquema não pode ser '
-            'dado como completo');
+        return verificar(
+          'há dose com data no futuro: o esquema não pode ser '
+          'dado como completo',
+        );
       }
 
       for (final intervalo in regra.intervalosEntreDoses) {
@@ -528,16 +600,20 @@ class VacinasEngine {
         final dataInicial = inicial.dataAplicacao;
         final dataUltima = ultima.dataAplicacao;
         if (dataInicial == null || dataUltima == null) {
-          return verificar('dose sem data: intervalo entre as doses '
-              '${intervalo.doseInicial} e ${intervalo.doseFinal} não verificável');
+          return verificar(
+            'dose sem data: intervalo entre as doses '
+            '${intervalo.doseInicial} e ${intervalo.doseFinal} não verificável',
+          );
         }
 
         final minimo = intervalo.minimo;
         if (minimo == null) continue;
 
         if (!_naoPosteriorA(_somarIntervalo(dataInicial, minimo), dataUltima)) {
-          return verificar('intervalo mínimo de $minimo entre as doses '
-              '${intervalo.doseInicial} e ${intervalo.doseFinal} não cumprido');
+          return verificar(
+            'intervalo mínimo de $minimo entre as doses '
+            '${intervalo.doseInicial} e ${intervalo.doseFinal} não cumprido',
+          );
         }
       }
 
@@ -547,7 +623,8 @@ class VacinasEngine {
         mensagem: mensagemDoseRegistrada,
         nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
         podeRegistrar: false,
-        motivo: 'esquema de ${regra.dosesDoEsquemaBasico} doses registrado pela '
+        motivo:
+            'esquema de ${regra.dosesDoEsquemaBasico} doses registrado pela '
             'usuária',
       );
     }
@@ -571,12 +648,16 @@ class VacinasEngine {
     for (final intervalo in intervalos) {
       final referencia = porNumero[intervalo.doseInicial];
       if (referencia == null) {
-        return verificar('falta a dose ${intervalo.doseInicial}, exigida para '
-            'avaliar a dose $proxima');
+        return verificar(
+          'falta a dose ${intervalo.doseInicial}, exigida para '
+          'avaliar a dose $proxima',
+        );
       }
       if (referencia.dataAplicacao == null) {
-        return verificar('dose ${intervalo.doseInicial} sem data: intervalo até '
-            'a dose $proxima não verificável');
+        return verificar(
+          'dose ${intervalo.doseInicial} sem data: intervalo até '
+          'a dose $proxima não verificável',
+        );
       }
     }
 
@@ -594,7 +675,8 @@ class VacinasEngine {
           mensagem: mensagemAguardarIntervalo,
           nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
           podeRegistrar: true,
-          motivo: 'dose $proxima: intervalo mínimo de $minimo desde a dose '
+          motivo:
+              'dose $proxima: intervalo mínimo de $minimo desde a dose '
               '${intervalo.doseInicial} completa em ${_soData(liberacao)}',
         );
       }
@@ -614,7 +696,8 @@ class VacinasEngine {
           mensagem: mensagemAguardarRecomendado,
           nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
           podeRegistrar: true,
-          motivo: 'dose $proxima: intervalo mínimo cumprido, recomendado de '
+          motivo:
+              'dose $proxima: intervalo mínimo cumprido, recomendado de '
               '$recomendado desde a dose ${intervalo.doseInicial} completa em '
               '${_soData(liberacao)}',
         );
@@ -627,7 +710,8 @@ class VacinasEngine {
       mensagem: mensagemPeriodoRecomendado,
       nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
       podeRegistrar: true,
-      motivo: 'dose $proxima de ${regra.dosesDoEsquemaBasico}: intervalos '
+      motivo:
+          'dose $proxima de ${regra.dosesDoEsquemaBasico}: intervalos '
           'recomendados cumpridos',
     );
   }
@@ -665,8 +749,9 @@ class VacinasEngine {
         .where((r) => r.temporadaNoRegistro == temporadaVigente)
         .toList(growable: false);
 
-    final aplicadas =
-        daTemporada.where((r) => _declaraDoseAplicada(r, dataAtual)).length;
+    final aplicadas = daTemporada
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .length;
     if (aplicadas >= regra.dosesPorTemporada) {
       return StatusVacinacao(
         vacinaCodigo: regra.codigo,
@@ -674,7 +759,8 @@ class VacinasEngine {
         mensagem: mensagemDoseRegistrada,
         nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
         podeRegistrar: false,
-        motivo: 'doses da temporada $temporadaVigente registradas pela '
+        motivo:
+            'doses da temporada $temporadaVigente registradas pela '
             'usuária: $aplicadas de ${regra.dosesPorTemporada}',
       );
     }
@@ -707,7 +793,8 @@ class VacinasEngine {
       mensagem: mensagemPeriodoRecomendado,
       nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
       podeRegistrar: true,
-      motivo: 'sem dose declarada na temporada $temporadaVigente: '
+      motivo:
+          'sem dose declarada na temporada $temporadaVigente: '
           '$aplicadas de ${regra.dosesPorTemporada}',
     );
   }
@@ -717,13 +804,14 @@ class VacinasEngine {
     required DateTime dum,
     required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
+    required String? gestacaoId,
   }) {
     final registros = historico
         .where((r) => r.vacinaCodigo == regra.codigo)
         .toList(growable: false);
 
     final destaGestacao = registros
-        .where((r) => _pertenceAGestacaoAtual(r, dum))
+        .where((r) => _pertenceAGestacaoAtual(r, dum, gestacaoId))
         .toList(growable: false);
 
     final dosesPrevistas = regra.dosesPorGestacao;
@@ -738,8 +826,9 @@ class VacinasEngine {
       );
     }
 
-    final aplicadasNestaGestacao =
-        destaGestacao.where((r) => _declaraDoseAplicada(r, dataAtual)).length;
+    final aplicadasNestaGestacao = destaGestacao
+        .where((r) => _declaraDoseAplicada(r, dataAtual))
+        .length;
     if (aplicadasNestaGestacao >= dosesPrevistas) {
       return StatusVacinacao(
         vacinaCodigo: regra.codigo,
@@ -747,14 +836,12 @@ class VacinasEngine {
         mensagem: mensagemDoseRegistrada,
         nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
         podeRegistrar: false,
-        motivo: 'doses desta gestação registradas pela usuária: '
+        motivo:
+            'doses desta gestação registradas pela usuária: '
             '$aplicadasNestaGestacao de $dosesPrevistas',
       );
     }
 
-    // Um registro indeterminado sem DUM não é atribuído a gestação nenhuma,
-    // mas o intervalo desta regra é contado sobre qualquer dose anterior:
-    // sem saber se ele é dose, não dá para concluir sobre o intervalo.
     if (registros.any((r) => _dataNoFuturo(r, dataAtual))) {
       return StatusVacinacao(
         vacinaCodigo: regra.codigo,
@@ -768,7 +855,11 @@ class VacinasEngine {
 
     final indeterminadosRelevantes = registros
         .where(_temSituacaoIndeterminada)
-        .where((r) => r.dumNoRegistro == null || _pertenceAGestacaoAtual(r, dum))
+        .where(
+          (r) =>
+              r.dumNoRegistro == null ||
+              _pertenceAGestacaoAtual(r, dum, gestacaoId),
+        )
         .toList(growable: false);
 
     if (indeterminadosRelevantes.isNotEmpty) {
@@ -812,7 +903,10 @@ class VacinasEngine {
         .map((r) => r.dataAplicacao!)
         .reduce((a, b) => a.isAfter(b) ? a : b);
 
-    final liberacao = _somarIntervalo(ultimaDose, regra.intervaloMinimoDesdeUltimaDose);
+    final liberacao = _somarIntervalo(
+      ultimaDose,
+      regra.intervaloMinimoDesdeUltimaDose,
+    );
 
     if (_naoPosteriorA(liberacao, dataAtual)) {
       return StatusVacinacao(
@@ -821,7 +915,8 @@ class VacinasEngine {
         mensagem: mensagemPeriodoRecomendado,
         nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
         podeRegistrar: true,
-        motivo: 'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} cumprido '
+        motivo:
+            'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} cumprido '
             'desde ${_soData(ultimaDose)}',
       );
     }
@@ -832,7 +927,8 @@ class VacinasEngine {
       mensagem: mensagemAguardarIntervalo,
       nivelAtencao: nivelDoEstado(EstadoVacina.aguardarIntervalo),
       podeRegistrar: true,
-      motivo: 'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} desde '
+      motivo:
+          'intervalo de ${regra.intervaloMinimoDesdeUltimaDose} desde '
           '${_soData(ultimaDose)} completa em ${_soData(liberacao)}',
     );
   }
@@ -840,7 +936,7 @@ class VacinasEngine {
   static DateTime _somarIntervalo(DateTime data, Intervalo intervalo) {
     switch (intervalo.unidade) {
       case UnidadeIntervalo.dias:
-        return data.add(Duration(days: intervalo.valor));
+        return adicionarDias(data, intervalo.valor);
       case UnidadeIntervalo.meses:
         return adicionarMeses(data, intervalo.valor);
     }
@@ -857,11 +953,11 @@ class VacinasEngine {
     required DateTime dum,
     required DateTime dataAtual,
     required List<RegistroVacinacao> historico,
+    required String? gestacaoId,
   }) {
-  
     final registrosDestaGestacao = historico
         .where((r) => r.vacinaCodigo == regra.codigo)
-        .where((r) => _pertenceAGestacaoAtual(r, dum))
+        .where((r) => _pertenceAGestacaoAtual(r, dum, gestacaoId))
         .toList(growable: false);
 
     final dosesPrevistas = regra.dosesPorGestacao;
@@ -887,7 +983,8 @@ class VacinasEngine {
         mensagem: mensagemDoseRegistrada,
         nivelAtencao: nivelDoEstado(EstadoVacina.registrada),
         podeRegistrar: false,
-        motivo: 'doses desta gestação registradas pela usuária: '
+        motivo:
+            'doses desta gestação registradas pela usuária: '
             '$dosesAplicadas de $dosesPrevistas',
       );
     }
@@ -936,7 +1033,7 @@ class VacinasEngine {
         podeRegistrar: true,
         proximaJanela: ProximaJanela(
           semanaGestacional: regra.semanaInicial,
-          dataEstimada: dum.add(Duration(days: regra.semanaInicial * 7)),
+          dataEstimada: adicionarDias(dum, regra.semanaInicial * 7),
         ),
         motivo: 'semana $semana anterior à semana ${regra.semanaInicial}',
       );
@@ -948,16 +1045,27 @@ class VacinasEngine {
       mensagem: mensagemPeriodoRecomendado,
       nivelAtencao: nivelDoEstado(EstadoVacina.periodoRecomendado),
       podeRegistrar: true,
-      motivo: 'semana $semana dentro da janela a partir de '
+      motivo:
+          'semana $semana dentro da janela a partir de '
           '${regra.semanaInicial}',
     );
   }
 
-  static bool _pertenceAGestacaoAtual(RegistroVacinacao registro, DateTime dum) {
+  static bool _pertenceAGestacaoAtual(
+    RegistroVacinacao registro,
+    DateTime dum,
+    String? gestacaoIdAtual,
+  ) {
+    final idDoRegistro = registro.gestacaoId;
+    if (idDoRegistro != null && gestacaoIdAtual != null) {
+      return idDoRegistro == gestacaoIdAtual;
+    }
+
     final dumDoRegistro = registro.dumNoRegistro;
     if (dumDoRegistro == null) return false;
 
-    return _mesmoDia(dumDoRegistro, dum);
+    final distancia = diasDeCalendarioEntre(dumDoRegistro, dum).abs();
+    return distancia <= toleranciaDumLegadaEmDias;
   }
 
   static bool _dataNoFuturo(RegistroVacinacao registro, DateTime dataAtual) {
@@ -969,16 +1077,13 @@ class VacinasEngine {
     RegistroVacinacao registro,
     DateTime dataAtual,
   ) {
-    
     if (_dataNoFuturo(registro, dataAtual)) return false;
 
     return registro.situacaoInformada == SituacaoInformada.aplicadaComData ||
-        registro.situacaoInformada == SituacaoInformada.aplicadaDataDesconhecida;
+        registro.situacaoInformada ==
+            SituacaoInformada.aplicadaDataDesconhecida;
   }
 
   static bool _temSituacaoIndeterminada(RegistroVacinacao registro) =>
       registro.situacaoInformada == SituacaoInformada.situacaoDesconhecida;
-
-  static bool _mesmoDia(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }

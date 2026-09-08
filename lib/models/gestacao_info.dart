@@ -1,9 +1,13 @@
+import '../services/vacinas_engine.dart' show diasDeCalendarioEntre;
+
 class GestacaoInfo {
   final DateTime dum; // Data da Última Menstruação
 
-  GestacaoInfo({required this.dum});
+  final String? id;
 
-  int get diasGestacao => DateTime.now().difference(dum).inDays;
+  GestacaoInfo({required this.dum, this.id});
+
+  int get diasGestacao => diasDeCalendarioEntre(dum, DateTime.now());
 
   int get semanaAtual {
     final semana = (diasGestacao / 7).floor();
@@ -27,16 +31,17 @@ class GestacaoInfo {
 
   DateTime get dataProvavelParto => dum.add(const Duration(days: 280));
 
-  Map<String, String> get tamanhoBebe => _tabelaTamanhos[semanaAtual] ??
+  Map<String, String> get tamanhoBebe =>
+      _tabelaTamanhos[semanaAtual] ??
       {'fruta': 'Bebê', 'emoji': '👶', 'tamanho': '--'};
 
   static const Map<int, Map<String, String>> _tabelaTamanhos = {
-    4:  {'fruta': 'Semente de papoula', 'emoji': '⚫', 'tamanho': '0,2 cm'},
-    5:  {'fruta': 'Semente de gergelim', 'emoji': '⚫', 'tamanho': '0,3 cm'},
-    6:  {'fruta': 'Lentilha', 'emoji': '🫘', 'tamanho': '0,6 cm'},
-    7:  {'fruta': 'Mirtilo', 'emoji': '🫐', 'tamanho': '1,3 cm'},
-    8:  {'fruta': 'Framboesa', 'emoji': '🍇', 'tamanho': '1,6 cm'},
-    9:  {'fruta': 'Azeitona', 'emoji': '🫒', 'tamanho': '2,3 cm'},
+    4: {'fruta': 'Semente de papoula', 'emoji': '⚫', 'tamanho': '0,2 cm'},
+    5: {'fruta': 'Semente de gergelim', 'emoji': '⚫', 'tamanho': '0,3 cm'},
+    6: {'fruta': 'Lentilha', 'emoji': '🫘', 'tamanho': '0,6 cm'},
+    7: {'fruta': 'Mirtilo', 'emoji': '🫐', 'tamanho': '1,3 cm'},
+    8: {'fruta': 'Framboesa', 'emoji': '🍇', 'tamanho': '1,6 cm'},
+    9: {'fruta': 'Azeitona', 'emoji': '🫒', 'tamanho': '2,3 cm'},
     10: {'fruta': 'Morango', 'emoji': '🍓', 'tamanho': '3,1 cm'},
     11: {'fruta': 'Figo', 'emoji': '🟤', 'tamanho': '4,1 cm'},
     12: {'fruta': 'Limão', 'emoji': '🍋', 'tamanho': '5,4 cm'},
