@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'models/contracao.dart';
+import 'screens/conta_screen.dart';
 import 'screens/contracao_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/historico_screen.dart';
@@ -574,6 +575,31 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                             const Spacer(),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const ContaScreen()),
+                                );
+                              },
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                margin: const EdgeInsets.only(right: 10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.statPurple(context),
+                                  shape: BoxShape.circle,
+                                  // withValues em vez de withOpacity: linha nova
+                                  // não deve somar mais um aviso de deprecação.
+                                  border: Border.all(color: AppColors.accent(context).withValues(alpha: 0.2), width: 0.5),
+                                ),
+                                child: Icon(
+                                  Icons.person_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.accent(context),
+                                ),
+                              ),
+                            ),
                             GestureDetector(
                               onTap: _toggleTema,
                               child: Container(

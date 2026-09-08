@@ -65,6 +65,123 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // A mesma frase para conta existente e inexistente. Confirmar aqui que o
+  // e-mail está cadastrado transformaria o formulário num verificador de
+  // contas de gestantes.
+  static const String _avisoNeutroDeRecuperacao =
+      'Se houver uma conta com esse e-mail, enviamos um link para redefinir '
+      'a senha. Verifique também a caixa de spam.';
+
+  Future<void> _abrirRecuperacao() async {
+    final controller = TextEditingController(text: _emailController.text.trim());
+    String? erroDoEnvio;
+    bool enviando = false;
+
+    final enviou = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            Future<void> enviar() async {
+              final email = controller.text.trim();
+              if (email.isEmpty) {
+                setDialogState(() => erroDoEnvio = 'Informe seu e-mail.');
+                return;
+              }
+
+              setDialogState(() {
+                enviando = true;
+                erroDoEnvio = null;
+              });
+
+              final erro = await AuthService.recuperarSenha(email: email);
+
+              if (!ctx.mounted) return;
+
+              if (erro != null) {
+                setDialogState(() {
+                  enviando = false;
+                  erroDoEnvio = erro;
+                });
+                return;
+              }
+
+              Navigator.pop(ctx, true);
+            }
+
+            return AlertDialog(
+              backgroundColor: AppColors.surface(ctx),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                'Recuperar senha',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary(ctx)),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enviaremos um link para você criar uma senha nova.',
+                    style: TextStyle(fontSize: 12, height: 1.35, color: AppColors.textSecondary(ctx)),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.emailAddress,
+                    style: TextStyle(color: AppColors.textPrimary(ctx)),
+                    decoration: InputDecoration(
+                      labelText: 'E-mail',
+                      filled: true,
+                      fillColor: AppColors.statPurple(ctx),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  if (erroDoEnvio != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      erroDoEnvio!,
+                      style: TextStyle(fontSize: 11, height: 1.35, color: AppColors.textSecondary(ctx)),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text('Cancelar', style: TextStyle(color: AppColors.textPrimary(ctx))),
+                ),
+                TextButton(
+                  onPressed: enviando ? null : enviar,
+                  child: enviando
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'Enviar',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryPurple),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (enviou != true || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(_avisoNeutroDeRecuperacao)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -177,7 +294,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           : const Text('Entrar', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: _carregando ? null : _abrirRecuperacao,
+                    child: Text(
+                      'Esqueci minha senha',
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary(context)),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   TextButton(
                     onPressed: () {
                       Navigator.push(

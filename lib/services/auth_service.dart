@@ -31,6 +31,19 @@ class AuthService {
     }
   }
 
+  // A recuperação nunca revela se o e-mail existe: uma conta inexistente
+  // devolve o mesmo sucesso silencioso de uma conta real. Do contrário o
+  // formulário viraria um verificador de contas cadastradas.
+  static Future<String?> recuperarSenha({required String email}) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null; // sucesso
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') return null;
+      return _traduzirErroDeRecuperacao(e.code);
+    }
+  }
+
   static Future<void> logout() async {
     await _auth.signOut();
   }
@@ -51,6 +64,23 @@ class AuthService {
         return 'Muitas tentativas. Tente novamente mais tarde.';
       default:
         return 'Ocorreu um erro. Tente novamente.';
+    }
+  }
+
+  // Separado do login de propósito: aqui não existe senha, então "E-mail ou
+  // senha incorretos" não faria sentido — e o default precisa ser genérico
+  // para não deixar escapar o motivo real da falha.
+  static String _traduzirErroDeRecuperacao(String code) {
+    switch (code) {
+      case 'invalid-email':
+      case 'missing-email':
+        return 'E-mail inválido.';
+      case 'too-many-requests':
+        return 'Muitas tentativas. Tente novamente mais tarde.';
+      case 'network-request-failed':
+        return 'Sem conexão. Verifique sua internet e tente novamente.';
+      default:
+        return 'Não foi possível enviar o e-mail agora. Tente novamente.';
     }
   }
 }

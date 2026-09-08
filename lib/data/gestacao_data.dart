@@ -1,9 +1,10 @@
 import '../models/gestacao_info.dart';
 
 // DUM padrão (semana 28) — usada até o usuário configurar a data real
-DateTime _dumPadrao = DateTime.now().subtract(const Duration(days: 28 * 7 + 3));
+DateTime _dumPadrao() =>
+    DateTime.now().subtract(const Duration(days: 28 * 7 + 3));
 
-GestacaoInfo gestacaoAtual = GestacaoInfo(dum: _dumPadrao);
+GestacaoInfo gestacaoAtual = GestacaoInfo(dum: _dumPadrao());
 
 void atualizarDUM(DateTime novaDum) {
   gestacaoAtual = GestacaoInfo(dum: novaDum, id: gestacaoAtual.id);
@@ -15,4 +16,10 @@ void iniciarGestacao(DateTime dum) {
 
 void definirGestacao(DateTime dum, String id) {
   gestacaoAtual = GestacaoInfo(dum: dum, id: id);
+}
+
+// Descarta DUM e identidade, voltando ao placeholder. Não é "gestação nova":
+// é nenhuma gestação. Usado no logout.
+void encerrarGestacao() {
+  gestacaoAtual = GestacaoInfo(dum: _dumPadrao());
 }
