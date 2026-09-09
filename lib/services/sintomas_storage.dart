@@ -14,24 +14,39 @@ class SintomasStorage {
         .collection('sintomas');
   }
 
-  static Future<void> salvarRegistros(List<RegistroSintomas> registros) async {
-    final colecao = _colecao;
-    if (colecao == null) return;
+  static bool dataEhEnderecavel(String data) =>
+      data.isNotEmpty && !data.contains('/');
 
-    final batch = FirebaseFirestore.instance.batch();
+  static DocumentReference<Map<String, dynamic>>? _documento(String data) {
+    if (!dataEhEnderecavel(data)) return null;
+    return _colecao?.doc(data);
+  }
 
-    final existentes = await colecao.get();
-    for (final doc in existentes.docs) {
-      batch.delete(doc.reference);
-    }
+  static Future<RegistroSintomas?> salvarRegistro(
+    RegistroSintomas registro,
+  ) async {
+    final doc = _documento(registro.data);
+    if (doc == null) return null;
 
-    for (final r in registros) {
-      // Usa a data como ID do documento — evita duplicar o mesmo dia
-      final novoDoc = colecao.doc(r.data);
-      batch.set(novoDoc, r.toMap());
-    }
+    await doc.set(registro.toMap());
+    return registro;
+  }
 
-    await batch.commit();
+  static Future<bool> atualizarRegistro(RegistroSintomas registro) async {
+    final doc = _documento(registro.data);
+    if (doc == null) return false;
+
+    await doc.update(registro.toMap());
+    return true;
+  }
+
+  /// Remove só o documento daquele dia.
+  static Future<bool> removerRegistro(String data) async {
+    final doc = _documento(data);
+    if (doc == null) return false;
+
+    await doc.delete();
+    return true;
   }
 
   static Future<List<RegistroSintomas>> carregarRegistros() async {
@@ -39,6 +54,11 @@ class SintomasStorage {
     if (colecao == null) return [];
 
     final snapshot = await colecao.get();
-    return snapshot.docs.map((doc) => RegistroSintomas.fromMap(doc.data())).toList();
+    return snapshot.docs
+        .map(
+          (doc) =>
+              RegistroSintomas.fromMap(doc.data(), dataDoDocumento: doc.id),
+        )
+        .toList();
   }
 }

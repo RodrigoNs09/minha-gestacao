@@ -5,6 +5,27 @@ import '../services/firestore_error.dart';
 import '../services/sintomas_storage.dart';
 import '../theme/app_theme.dart';
 
+List<RegistroSintomas> comRegistroDoDia(
+  List<RegistroSintomas> historico,
+  RegistroSintomas registro,
+) {
+  return [
+    ...historico.where((r) => r.data != registro.data),
+    registro,
+  ];
+}
+
+class SessaoSemGravacao implements Exception {
+  const SessaoSemGravacao();
+}
+
+const String mensagemSessaoExpirada =
+    'Não foi possível salvar: sessão expirada. Entre novamente.';
+
+String mensagemDeFalhaAoSalvar(Object erro) => erro is SessaoSemGravacao
+    ? mensagemSessaoExpirada
+    : FirestoreErro.mensagemAmigavel(erro);
+
 class SintomasScreen extends StatefulWidget {
   const SintomasScreen({super.key});
 
@@ -69,26 +90,31 @@ class _SintomasScreenState extends State<SintomasScreen> {
   }
 
   Future<void> _salvarRegistroDeHoje() async {
-    final hoje = _hoje();
-    final registroAnterior = listaSintomas.where((r) => r.data == hoje).toList();
-    listaSintomas.removeWhere((r) => r.data == hoje);
+
+    final anterior = List<RegistroSintomas>.from(listaSintomas);
 
     final peso = double.tryParse(_pesoController.text.replaceAll(',', '.'));
 
     final novoRegistro = RegistroSintomas(
-      data: hoje,
+      data: _hoje(),
       humor: _humorSelecionado,
       sintomas: _sintomasSelecionados.toList(),
       peso: peso,
     );
-    listaSintomas.add(novoRegistro);
+    listaSintomas = comRegistroDoDia(listaSintomas, novoRegistro);
 
+    final RegistroSintomas? salvo;
     try {
-      await SintomasStorage.salvarRegistros(listaSintomas);
+
+      salvo = await SintomasStorage.salvarRegistro(novoRegistro);
     } catch (_) {
-      listaSintomas.remove(novoRegistro);
-      listaSintomas.addAll(registroAnterior);
+      listaSintomas = anterior;
       rethrow;
+    }
+
+    if (salvo == null) {
+      listaSintomas = anterior;
+      throw const SessaoSemGravacao();
     }
 
     if (mounted) setState(() {});
@@ -103,7 +129,7 @@ class _SintomasScreenState extends State<SintomasScreen> {
       if (!mounted) return;
       setState(() => _humorSelecionado = humorAnterior);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+        SnackBar(content: Text(mensagemDeFalhaAoSalvar(erro))),
       );
     }
   }
@@ -129,7 +155,7 @@ class _SintomasScreenState extends State<SintomasScreen> {
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+        SnackBar(content: Text(mensagemDeFalhaAoSalvar(erro))),
       );
     }
   }
@@ -140,7 +166,7 @@ class _SintomasScreenState extends State<SintomasScreen> {
     } catch (erro) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+        SnackBar(content: Text(mensagemDeFalhaAoSalvar(erro))),
       );
       return;
     }
@@ -152,8 +178,7 @@ class _SintomasScreenState extends State<SintomasScreen> {
   }
 
   List<RegistroSintomas> get _historico {
-    final hoje = _hoje();
-    final lista = listaSintomas.where((r) => r.data != hoje).toList();
+    final lista = List<RegistroSintomas>.from(listaSintomas);
     lista.sort((a, b) => b.data.compareTo(a.data));
     return lista;
   }

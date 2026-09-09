@@ -20,13 +20,47 @@ class RegistroSintomas {
     };
   }
 
-  factory RegistroSintomas.fromMap(Map<String, dynamic> map) {
+  factory RegistroSintomas.fromMap(
+    Map<String, dynamic> map, {
+    String? dataDoDocumento,
+  }) {
     return RegistroSintomas(
-      data: map['data'] ?? '',
-      humor: map['humor'],
-      sintomas: List<String>.from(map['sintomas'] ?? []),
-      peso: map['peso'] != null ? (map['peso'] as num).toDouble() : null,
+      data: _texto(map['data']) ?? dataDoDocumento ?? '',
+      humor: _inteiro(map['humor']),
+      sintomas: _listaDeTextos(map['sintomas']),
+      peso: _decimal(map['peso']),
     );
+  }
+
+  static String? _texto(Object? bruto) {
+    if (bruto is! String || bruto.isEmpty) return null;
+    return bruto;
+  }
+
+  static int? _inteiro(Object? bruto) {
+    if (bruto is int) return bruto;
+    if (bruto is num) return bruto.toInt();
+    if (bruto is String) return int.tryParse(bruto);
+    return null;
+  }
+
+  static double? _decimal(Object? bruto) {
+    final double? valor;
+    if (bruto is num) {
+      valor = bruto.toDouble();
+    } else if (bruto is String) {
+      valor = double.tryParse(bruto.replaceAll(',', '.'));
+    } else {
+      valor = null;
+    }
+
+    if (valor == null || valor.isNaN || valor.isInfinite) return null;
+    return valor;
+  }
+
+  static List<String> _listaDeTextos(Object? bruto) {
+    if (bruto is! List) return const [];
+    return bruto.whereType<String>().where((item) => item.isNotEmpty).toList();
   }
 
   RegistroSintomas copyWith({
