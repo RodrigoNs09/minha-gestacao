@@ -1,12 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum OrigemDuracao {
-  campo,
-
-  observacoes,
-
-  indisponivel,
-}
+enum OrigemDuracao { campo, observacoes, indisponivel }
 
 class Contracao {
   final String? id;
@@ -70,7 +64,11 @@ class Contracao {
     return '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
   }
 
-  static final RegExp _padraoDuracao = RegExp(r'Duração:\s*(\d{1,3}):(\d{2})(?!\d)');
+  static String _texto(Object? bruto) => bruto is String ? bruto : '';
+
+  static final RegExp _padraoDuracao = RegExp(
+    r'Duração:\s*(\d{1,3}):(\d{2})(?!\d)',
+  );
 
   static int? duracaoSegundosDe(String? observacoes) {
     if (observacoes == null || observacoes.isEmpty) return null;
@@ -137,19 +135,47 @@ class Contracao {
     return mapa;
   }
 
+  // todo o histórico.
   factory Contracao.fromMap(Map<String, dynamic> map, {String? id}) {
     return Contracao(
       id: id,
-      data: map['data'] as String?, 
-      inicio: map['inicio'] ?? '',
-      fim: map['fim'] ?? '',
-      intensidade: map['intensidade'] ?? '',
-      observacoes: map['observacoes'] ?? '',
+
+      data: _texto(map['data']),
+      inicio: _texto(map['inicio']),
+      fim: _texto(map['fim']),
+      intensidade: _texto(map['intensidade']),
+      observacoes: _texto(map['observacoes']),
       duracaoSegundos: _normalizarSegundos(map['duracaoSegundos']),
     );
   }
 
+  Contracao copyWith({
+    String? data,
+    String? inicio,
+    String? fim,
+    String? intensidade,
+    String? observacoes,
+    int? duracaoSegundos,
+  }) {
+    final int? doCampo =
+        duracaoSegundos ??
+        (origemDuracao == OrigemDuracao.campo ? this.duracaoSegundos : null);
+
+    return Contracao(
+      id: id,
+      data: data ?? this.data,
+      inicio: inicio ?? this.inicio,
+      fim: fim ?? this.fim,
+      intensidade: intensidade ?? this.intensidade,
+      observacoes: observacoes ?? this.observacoes,
+      duracaoSegundos: doCampo,
+    );
+  }
+
   factory Contracao.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    return Contracao.fromMap(doc.data() ?? const <String, dynamic>{}, id: doc.id);
+    return Contracao.fromMap(
+      doc.data() ?? const <String, dynamic>{},
+      id: doc.id,
+    );
   }
 }

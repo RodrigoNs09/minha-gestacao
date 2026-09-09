@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/models/contracao.dart';
 
@@ -146,11 +148,14 @@ void main() {
       expect(c.origemDuracao, OrigemDuracao.indisponivel);
     });
 
-    test('campo tipado igual a zero é respeitado, não tratado como ausente', () {
-      final c = criar(observacoes: 'Duração: 05:00', duracaoSegundos: 0);
-      expect(c.duracaoSegundos, 0);
-      expect(c.origemDuracao, OrigemDuracao.campo);
-    });
+    test(
+      'campo tipado igual a zero é respeitado, não tratado como ausente',
+      () {
+        final c = criar(observacoes: 'Duração: 05:00', duracaoSegundos: 0);
+        expect(c.duracaoSegundos, 0);
+        expect(c.origemDuracao, OrigemDuracao.campo);
+      },
+    );
 
     test('campo tipado negativo é descartado e cai na derivação', () {
       final c = criar(observacoes: 'Duração: 01:30', duracaoSegundos: -5);
@@ -161,13 +166,13 @@ void main() {
 
   group('Contracao.duracaoFormatada', () {
     Contracao comSegundos(int? s) => Contracao(
-          inicio: '08:00',
-          fim: '08:02',
-          intensidade: 'Leve',
-          observacoes: '',
-          data: '2026-01-15',
-          duracaoSegundos: s,
-        );
+      inicio: '08:00',
+      fim: '08:02',
+      intensidade: 'Leve',
+      observacoes: '',
+      data: '2026-01-15',
+      duracaoSegundos: s,
+    );
 
     test('formata como MM:SS com zero à esquerda', () {
       expect(comSegundos(90).duracaoFormatada, '01:30');
@@ -184,7 +189,11 @@ void main() {
     });
 
     test('ida e volta: derivar e reformatar preserva o valor', () {
-      for (final texto in ['Duração: 00:07', 'Duração: 12:34', 'Duração: 105:30']) {
+      for (final texto in [
+        'Duração: 00:07',
+        'Duração: 12:34',
+        'Duração: 105:30',
+      ]) {
         final segundos = Contracao.duracaoSegundosDe(texto);
         final c = comSegundos(segundos);
         expect('Duração: ${c.duracaoFormatada}', texto);
@@ -221,10 +230,7 @@ void main() {
     });
 
     test('duracaoSegundos vindo como num é normalizado para int', () {
-      final c = Contracao.fromMap({
-        'observacoes': '',
-        'duracaoSegundos': 90.0,
-      });
+      final c = Contracao.fromMap({'observacoes': '', 'duracaoSegundos': 90.0});
       expect(c.duracaoSegundos, 90);
       expect(c.origemDuracao, OrigemDuracao.campo);
     });
@@ -246,12 +252,31 @@ void main() {
       expect(c.intensidade, '');
     });
 
-    test('campo data ausente ainda cai no fallback de hoje (comportamento atual)', () {
+    test('campo data ausente NÃO cai no fallback de hoje', () {
       final c = Contracao.fromMap(const {'observacoes': ''});
       final agora = DateTime.now();
       final hoje =
           '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
-      expect(c.data, hoje);
+
+      // Atribuir o dia de hoje a um documento sem data deslocaria a
+      // contração para a data errada, em silêncio.
+      expect(c.data, '');
+      expect(c.data, isNot(hoje));
+    });
+
+    test('construir uma contração nova continua caindo no fallback de hoje', () {
+      final agora = DateTime.now();
+      final hoje =
+          '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
+
+      final nova = Contracao(
+        inicio: '08:00',
+        fim: '08:02',
+        intensidade: 'Forte',
+        observacoes: '',
+      );
+
+      expect(nova.data, hoje);
     });
   });
 
@@ -283,8 +308,10 @@ void main() {
     test('preserva origemDuracao derivada — não a promove a campo', () {
       final derivada = base();
       expect(derivada.origemDuracao, OrigemDuracao.observacoes);
-      expect(derivada.comId('doc-abc').origemDuracao,
-          OrigemDuracao.observacoes);
+      expect(
+        derivada.comId('doc-abc').origemDuracao,
+        OrigemDuracao.observacoes,
+      );
     });
 
     test('preserva origemDuracao de campo', () {
@@ -340,8 +367,13 @@ void main() {
       ).toMap();
 
       expect(mapa.containsKey('duracaoSegundos'), isFalse);
-      expect(mapa.keys.toSet(),
-          {'data', 'inicio', 'fim', 'intensidade', 'observacoes'});
+      expect(mapa.keys.toSet(), {
+        'data',
+        'inicio',
+        'fim',
+        'intensidade',
+        'observacoes',
+      });
     });
 
     test('mantém o prefixo Duração no texto — dual-write', () {
@@ -402,6 +434,297 @@ void main() {
 
       expect(legado.origemDuracao, OrigemDuracao.observacoes);
       expect(legado.toMap()['duracaoSegundos'], 90);
+    });
+  });
+
+  group('Contracao.fromMap — tipos inesperados não lançam', () {
+    test('data com tipo inesperado não lança e fica vazia', () {
+      for (final invalido in <Object>[
+        20260115,
+        3.5,
+        true,
+        <String>['2026-01-15'],
+        <String, String>{'d': '2026-01-15'},
+      ]) {
+        expect(
+          () => Contracao.fromMap({'data': invalido}),
+          returnsNormally,
+          reason: '$invalido',
+        );
+        expect(
+          Contracao.fromMap({'data': invalido}).data,
+          '',
+          reason: '$invalido',
+        );
+      }
+    });
+
+    test('os quatro campos de texto toleram tipo inesperado', () {
+      final c = Contracao.fromMap(const {
+        'inicio': 800,
+        'fim': 802,
+        'intensidade': 3,
+        'observacoes': <String>['dor lombar'],
+      });
+
+      expect(c.inicio, '');
+      expect(c.fim, '');
+      expect(c.intensidade, '');
+      expect(c.observacoes, '');
+    });
+
+    test('documento inteiramente malformado não lança', () {
+      expect(
+        () => Contracao.fromMap(const {
+          'data': 1,
+          'inicio': 2,
+          'fim': 3,
+          'intensidade': 4,
+          'observacoes': 5,
+          'duracaoSegundos': <String>['90'],
+        }, id: 'doc-ruim'),
+        returnsNormally,
+      );
+    });
+
+    test('um documento malformado continua endereçável pelo doc.id', () {
+      final c = Contracao.fromMap(const {'data': 1}, id: 'doc-ruim');
+
+      expect(c.id, 'doc-ruim');
+    });
+
+    test('nulos explícitos não lançam', () {
+      final c = Contracao.fromMap(const {
+        'data': null,
+        'inicio': null,
+        'fim': null,
+        'intensidade': null,
+        'observacoes': null,
+        'duracaoSegundos': null,
+      });
+
+      expect(c.data, '');
+      expect(c.inicio, '');
+      expect(c.duracaoSegundos, isNull);
+      expect(c.origemDuracao, OrigemDuracao.indisponivel);
+    });
+
+    test('observações com tipo inesperado não derivam duração fantasma', () {
+      final c = Contracao.fromMap(const {'observacoes': 90});
+
+      expect(c.observacoes, '');
+      expect(c.duracaoSegundos, isNull);
+      expect(c.origemDuracao, OrigemDuracao.indisponivel);
+    });
+  });
+
+  group('Contracao.copyWith', () {
+    Contracao base({String observacoes = 'Duração: 01:30', int? segundos}) {
+      return Contracao(
+        id: 'c1',
+        data: '2026-01-15',
+        inicio: '08:00',
+        fim: '08:02',
+        intensidade: 'Forte',
+        observacoes: observacoes,
+        duracaoSegundos: segundos,
+      );
+    }
+
+    test('preserva o id em qualquer alteração', () {
+      expect(base().copyWith(intensidade: 'Leve').id, 'c1');
+      expect(base().copyWith(data: '2026-02-01').id, 'c1');
+      expect(base().copyWith(observacoes: 'outra').id, 'c1');
+    });
+
+    test('altera só o campo pedido', () {
+      final original = base(segundos: 90);
+
+      final comIntensidade = original.copyWith(intensidade: 'Leve');
+      expect(comIntensidade.intensidade, 'Leve');
+      expect(comIntensidade.inicio, '08:00');
+      expect(comIntensidade.data, '2026-01-15');
+
+      final comData = original.copyWith(data: '2026-02-01');
+      expect(comData.data, '2026-02-01');
+      expect(comData.fim, '08:02');
+
+      final comHorarios = original.copyWith(inicio: '09:00', fim: '09:03');
+      expect(comHorarios.inicio, '09:00');
+      expect(comHorarios.fim, '09:03');
+    });
+
+    test('sem argumentos devolve os mesmos valores', () {
+      final original = base(segundos: 90);
+      final copia = original.copyWith();
+
+      expect(copia.toMap(), original.toMap());
+      expect(copia.id, original.id);
+      expect(copia.origemDuracao, original.origemDuracao);
+    });
+
+    test('preserva a duração de campo como campo', () {
+      final copia = base(segundos: 200).copyWith(intensidade: 'Leve');
+
+      expect(copia.duracaoSegundos, 200);
+      expect(copia.origemDuracao, OrigemDuracao.campo);
+    });
+
+    test('preserva origem derivada — não a promove a campo', () {
+      final legado = base(observacoes: 'Duração: 01:30');
+      expect(legado.origemDuracao, OrigemDuracao.observacoes);
+
+      final copia = legado.copyWith(intensidade: 'Leve');
+
+      expect(copia.duracaoSegundos, 90);
+      expect(copia.origemDuracao, OrigemDuracao.observacoes);
+    });
+
+    test('preserva duração indisponível', () {
+      final copia = base(observacoes: 'só uma anotação').copyWith(fim: '08:05');
+
+      expect(copia.duracaoSegundos, isNull);
+      expect(copia.origemDuracao, OrigemDuracao.indisponivel);
+    });
+
+    test('trocar a duração explicitamente vira duração de campo', () {
+      final copia = base(
+        observacoes: 'Duração: 01:30',
+      ).copyWith(duracaoSegundos: 200);
+
+      expect(copia.duracaoSegundos, 200);
+      expect(copia.origemDuracao, OrigemDuracao.campo);
+    });
+
+    test('trocar as observações re-deriva a duração legada', () {
+      final copia = base(
+        observacoes: 'Duração: 01:30',
+      ).copyWith(observacoes: 'Duração: 02:00');
+
+      expect(copia.duracaoSegundos, 120);
+      expect(copia.origemDuracao, OrigemDuracao.observacoes);
+    });
+
+    test('o id continua fora do mapa persistido', () {
+      expect(
+        base().copyWith(intensidade: 'Leve').toMap().containsKey('id'),
+        isFalse,
+      );
+    });
+  });
+
+  group('ContracoesStorage — forma das operações', () {
+    String fonteDoStorage() => File('lib/services/contracoes_storage.dart')
+        .readAsLinesSync()
+        .where((linha) => !linha.trimLeft().startsWith('//'))
+        .join('\n');
+
+    String corpoDoMetodo(String fonte, String assinatura) {
+      final inicio = fonte.indexOf(assinatura);
+      expect(inicio, greaterThan(-1), reason: assinatura);
+
+      final fim = fonte.indexOf('\n  }\n', inicio);
+      expect(fim, greaterThan(inicio), reason: assinatura);
+
+      return fonte.substring(inicio, fim);
+    }
+
+    test('não existe escrita destrutiva', () {
+      final codigo = fonteDoStorage();
+
+      expect(codigo, isNot(contains('batch')));
+      expect(codigo, isNot(contains('WriteBatch')));
+      expect(codigo, isNot(contains('.commit()')));
+      expect(codigo, isNot(contains('doc.reference')));
+      expect(codigo, isNot(contains('salvarContracoes')));
+    });
+
+    test('nenhuma escrita enumera a coleção', () {
+      for (final metodo in [
+        'static Future<Contracao?> adicionar(',
+        'static Future<bool> atualizar(',
+        'static Future<bool> remover(',
+      ]) {
+        final corpo = corpoDoMetodo(fonteDoStorage(), metodo);
+
+        expect(corpo, isNot(contains('.get()')), reason: metodo);
+        expect(corpo, isNot(contains('docs')), reason: metodo);
+        expect(corpo, isNot(contains('for (')), reason: metodo);
+      }
+    });
+
+    test('o único delete é o de um documento nomeado', () {
+      final codigo = fonteDoStorage();
+
+      expect('delete('.allMatches(codigo), hasLength(1));
+      expect(
+        corpoDoMetodo(codigo, 'static Future<bool> remover('),
+        contains('doc.delete()'),
+      );
+    });
+
+    test('atualizar usa update, para não recriar contração apagada', () {
+      final corpo = corpoDoMetodo(
+        fonteDoStorage(),
+        'static Future<bool> atualizar(',
+      );
+
+      expect(corpo, contains('doc.update('));
+      expect(corpo, isNot(contains('.set(')));
+    });
+
+    test('adicionar reaproveita o id recebido', () {
+      final corpo = corpoDoMetodo(
+        fonteDoStorage(),
+        'static Future<Contracao?> adicionar(',
+      );
+
+      expect(corpo, contains('idEhEnderecavel(idRecebido)'));
+      expect(corpo, contains('colecao.doc(id).set('));
+    });
+
+    test('as operações validam o id antes de endereçar', () {
+      final codigo = fonteDoStorage();
+
+      expect(codigo, contains('static bool idEhEnderecavel(String id)'));
+      expect(codigo, contains('_documento(contracao.id'));
+      expect(codigo, contains('_documento(id)'));
+    });
+
+    test('as escritas sinalizam ausência de sessão', () {
+      final codigo = fonteDoStorage();
+
+      expect(
+        corpoDoMetodo(codigo, 'static Future<Contracao?> adicionar('),
+        contains('return null;'),
+      );
+      for (final metodo in [
+        'static Future<bool> atualizar(',
+        'static Future<bool> remover(',
+      ]) {
+        expect(corpoDoMetodo(codigo, metodo), contains('return false;'));
+      }
+    });
+
+    test('o carregamento não ordena no servidor e usa o doc.id', () {
+      final corpo = corpoDoMetodo(
+        fonteDoStorage(),
+        'static Future<List<Contracao>> carregarContracoes(',
+      );
+
+      expect(corpo, isNot(contains('orderBy')));
+      expect(corpo, contains('Contracao.fromDoc(doc)'));
+    });
+
+    test('o caminho da coleção continua o mesmo', () {
+      final codigo = fonteDoStorage();
+
+      expect(codigo, contains(".collection('usuarios')"));
+      expect(codigo, contains(".collection('contracoes')"));
+    });
+
+    test('o storage não engole erro — quem trata é a tela', () {
+      expect(fonteDoStorage(), isNot(contains('catch')));
     });
   });
 }
