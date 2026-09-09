@@ -18,8 +18,13 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
   int _segundos = 0;
   bool _emAndamento = false;
   DateTime? _inicioDateTime;
+
+  DateTime? _fimDateTime;
+
   bool _salvando = false;
   String? _idPendente;
+
+  bool get _pendenteDeGravacao => _emAndamento && _fimDateTime != null;
 
   String intensidade = 'Forte';
   final TextEditingController observacoesController = TextEditingController();
@@ -38,18 +43,90 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
   }
 
   void iniciarContracao() {
-    if (_emAndamento) return;
+    if (_emAndamento || _salvando) return;
+
+    _timer?.cancel();
 
     setState(() {
       _emAndamento = true;
       _segundos = 0;
       _inicioDateTime = DateTime.now();
+      _fimDateTime = null;
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         _segundos++;
       });
+    });
+  }
+
+  Future<bool> _confirmarDescarte() async {
+    final resposta = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface(ctx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Descartar medição?',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(ctx),
+            ),
+          ),
+          content: Text(
+            'Esta contração de ${formatarTempo(_segundos)} não foi salva e '
+            'será perdida.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.textSecondary(ctx),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textPrimary(ctx)),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Descartar',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.pink,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return resposta == true;
+  }
+
+  Future<void> _descartarMedicao() async {
+    if (_salvando) return;
+
+    if (!await _confirmarDescarte()) return;
+    if (!mounted) return;
+
+    _timer?.cancel();
+
+    setState(() {
+      _emAndamento = false;
+      _segundos = 0;
+      _inicioDateTime = null;
+      _fimDateTime = null;
+      _idPendente = null;
     });
   }
 
@@ -61,41 +138,42 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       return;
     }
 
-    if (_salvando) return; // já existe uma tentativa em andamento
+    if (_salvando) return; 
 
     _timer?.cancel();
-    final fimDateTime = DateTime.now();
+
+    _fimDateTime ??= DateTime.now();
+    final fimDateTime = _fimDateTime!;
 
     final dataRegistro =
         '${_inicioDateTime!.year}-${_inicioDateTime!.month.toString().padLeft(2, '0')}-${_inicioDateTime!.day.toString().padLeft(2, '0')}';
 
-    // Reaproveita o mesmo id entre tentativas: um retry após falha sobrescreve
-    // o mesmo documento em vez de criar um novo.
-    _idPendente ??= ContracoesStorage.novoId();
-
-    final novaContracao = Contracao(
-      id: _idPendente,
-      data: dataRegistro,
-      inicio:
-          '${_inicioDateTime!.hour.toString().padLeft(2, '0')}:${_inicioDateTime!.minute.toString().padLeft(2, '0')}',
-      fim:
-          '${fimDateTime.hour.toString().padLeft(2, '0')}:${fimDateTime.minute.toString().padLeft(2, '0')}',
-      intensidade: intensidade,
-      observacoes: observacoesController.text.trim().isEmpty
-          ? 'Duração: ${formatarTempo(_segundos)}'
-          : 'Duração: ${formatarTempo(_segundos)} | ${observacoesController.text.trim()}',
-      // Valor medido pelo cronômetro, não derivado do texto acima.
-      duracaoSegundos: _segundos,
-    );
+    final inicioFormatado =
+        '${_inicioDateTime!.hour.toString().padLeft(2, '0')}:${_inicioDateTime!.minute.toString().padLeft(2, '0')}';
+    final fimFormatado =
+        '${fimDateTime.hour.toString().padLeft(2, '0')}:${fimDateTime.minute.toString().padLeft(2, '0')}';
 
     setState(() => _salvando = true);
 
     Contracao? salva;
     Object? erro;
     try {
-      // Grava um documento próprio e só então entra na lista em memória, já
-      // com o id devolvido pelo Firestore.
-      salva = await ContracoesStorage.adicionar(novaContracao);
+
+      _idPendente ??= ContracoesStorage.novoId();
+
+      salva = await ContracoesStorage.adicionar(
+        Contracao(
+          id: _idPendente,
+          data: dataRegistro,
+          inicio: inicioFormatado,
+          fim: fimFormatado,
+          intensidade: intensidade,
+          observacoes: observacoesController.text.trim().isEmpty
+              ? 'Duração: ${formatarTempo(_segundos)}'
+              : 'Duração: ${formatarTempo(_segundos)} | ${observacoesController.text.trim()}',
+          duracaoSegundos: _segundos,
+        ),
+      );
     } catch (e) {
       erro = e;
     }
@@ -108,6 +186,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
         _emAndamento = false;
         _segundos = 0;
         _inicioDateTime = null;
+        _fimDateTime = null;
         intensidade = 'Forte';
         observacoesController.clear();
         _salvando = false;
@@ -118,7 +197,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       );
       return;
     }
-    
+
     setState(() => _salvando = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -179,31 +258,39 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.navBar(context),
-        border: Border.all(
-          color: AppColors.border(context),
-          width: 0.5,
-        ),
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(36),
-        ),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Icon(Icons.home_rounded, color: AppColors.textSecondary(context), size: 20),
+          Icon(
+            Icons.home_rounded,
+            color: AppColors.textSecondary(context),
+            size: 20,
+          ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.access_time_rounded, color: AppTheme.primaryPurple, size: 20),
-              const SizedBox(height: 3),
-              const CircleAvatar(
-                radius: 2,
-                backgroundColor: Color(0xFF534AB7),
+              Icon(
+                Icons.access_time_rounded,
+                color: AppTheme.primaryPurple,
+                size: 20,
               ),
+              const SizedBox(height: 3),
+              const CircleAvatar(radius: 2, backgroundColor: Color(0xFF534AB7)),
             ],
           ),
-          Icon(Icons.auto_graph_rounded, color: AppColors.textSecondary(context), size: 20),
-          Icon(Icons.chat_bubble_outline_rounded, color: AppColors.textSecondary(context), size: 20),
+          Icon(
+            Icons.auto_graph_rounded,
+            color: AppColors.textSecondary(context),
+            size: 20,
+          ),
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: AppColors.textSecondary(context),
+            size: 20,
+          ),
         ],
       ),
     );
@@ -379,6 +466,20 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                             ),
                           ),
                         ),
+
+                        if (_pendenteDeGravacao)
+                          Center(
+                            child: TextButton(
+                              onPressed: _salvando ? null : _descartarMedicao,
+                              child: Text(
+                                'Descartar medição',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary(context),
+                                ),
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 16),
                         Text(
                           'INTENSIDADE',
@@ -431,7 +532,9 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                         TextField(
                           controller: observacoesController,
                           maxLines: 4,
-                          style: TextStyle(color: AppColors.textPrimary(context)),
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Adicione uma anotação...',
                             hintStyle: TextStyle(
