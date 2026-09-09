@@ -14,24 +14,41 @@ class ConsultasStorage {
         .collection('consultas');
   }
 
-  static Future<void> salvarConsultas(List<Consulta> consultas) async {
+  static bool idEhEnderecavel(String id) => id.isNotEmpty && !id.contains('/');
+
+  static DocumentReference<Map<String, dynamic>>? _documento(String id) {
+    if (!idEhEnderecavel(id)) return null;
+    return _colecao?.doc(id);
+  }
+
+  static String? novoId() => _colecao?.doc().id;
+
+  static Future<Consulta?> adicionar(Consulta consulta) async {
     final colecao = _colecao;
-    if (colecao == null) return;
+    if (colecao == null) return null;
 
-    final batch = FirebaseFirestore.instance.batch();
+    final id = idEhEnderecavel(consulta.id) ? consulta.id : colecao.doc().id;
+    final salva = consulta.comId(id);
 
-    final existentes = await colecao.get();
-    for (final doc in existentes.docs) {
-      batch.delete(doc.reference);
-    }
+    await colecao.doc(id).set(salva.toMap());
+    return salva;
+  }
 
-    for (final c in consultas) {
-      // Usa o id que a própria Consulta já gera (timestamp) como ID do documento
-      final novoDoc = colecao.doc(c.id);
-      batch.set(novoDoc, c.toMap());
-    }
+  static Future<bool> atualizar(Consulta consulta) async {
+    final doc = _documento(consulta.id);
+    if (doc == null) return false;
 
-    await batch.commit();
+    await doc.update(consulta.toMap());
+    return true;
+  }
+
+  /// Remove só o documento daquela consulta.
+  static Future<bool> remover(String id) async {
+    final doc = _documento(id);
+    if (doc == null) return false;
+
+    await doc.delete();
+    return true;
   }
 
   static Future<List<Consulta>> carregarConsultas() async {
@@ -39,6 +56,8 @@ class ConsultasStorage {
     if (colecao == null) return [];
 
     final snapshot = await colecao.get();
-    return snapshot.docs.map((doc) => Consulta.fromMap(doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => Consulta.fromMap(doc.data(), idDoDocumento: doc.id))
+        .toList();
   }
 }
