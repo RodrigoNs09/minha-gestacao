@@ -7,6 +7,65 @@ import '../theme/app_theme.dart';
 
 const int _metaChutes = 10;
 
+List<ChuteSessao> comSessao(List<ChuteSessao> historico, ChuteSessao sessao) {
+  return [...historico.where((s) => s.id == null || s.id != sessao.id), sessao];
+}
+
+bool sessaoJaNoHistorico(
+  List<ChuteSessao> historico, {
+  required String data,
+  required String horaInicio,
+}) {
+  return historico.any((s) => s.data == data && s.horaInicio == horaInicio);
+}
+
+enum RetomadaDeProgresso {
+
+  nenhuma,
+
+  restaurar,
+
+  concluir,
+
+  jaRegistrada,
+
+  deOutroDia,
+
+  irrecuperavel,
+}
+
+RetomadaDeProgresso retomadaPara(
+  ProgressoDeChutes? progresso, {
+  required String hoje,
+  required int meta,
+  required List<ChuteSessao> historico,
+  required String Function(DateTime) formatarHora,
+}) {
+  if (progresso == null) return RetomadaDeProgresso.nenhuma;
+  if (progresso.data != hoje) return RetomadaDeProgresso.deOutroDia;
+  if (progresso.chutes < meta) return RetomadaDeProgresso.restaurar;
+
+  final inicio = progresso.inicio;
+  if (inicio == null) return RetomadaDeProgresso.irrecuperavel;
+
+  if (progresso.sessaoId == null &&
+      sessaoJaNoHistorico(
+        historico,
+        data: progresso.data,
+        horaInicio: formatarHora(inicio),
+      )) {
+    return RetomadaDeProgresso.jaRegistrada;
+  }
+
+  return RetomadaDeProgresso.concluir;
+}
+
+const String mensagemSemSessao =
+    'Não foi possível salvar: sessão expirada. Entre novamente.';
+
+const String mensagemProgressoIrrecuperavel =
+    'A contagem anterior não pôde ser recuperada e foi descartada.';
+
 class ChutesScreen extends StatefulWidget {
   const ChutesScreen({super.key});
 
@@ -14,11 +73,17 @@ class ChutesScreen extends StatefulWidget {
   State<ChutesScreen> createState() => _ChutesScreenState();
 }
 
-class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderStateMixin {
+class _ChutesScreenState extends State<ChutesScreen>
+    with SingleTickerProviderStateMixin {
   int _chutesAtuais = 0;
   DateTime? _inicioSessao;
   bool _salvando = false;
   String? _idSessaoPendente;
+
+  /// A meta foi atingida mas a sessão ainda não está no servidor. Enquanto
+  /// isso for verdade o botão oferece nova tentativa em vez de ficar morto.
+  bool _conclusaoPendente = false;
+
   late AnimationController _pulseController;
 
   @override
@@ -37,27 +102,91 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  void _avisar(String mensagem) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensagem)));
+  }
+
   Future<void> _carregar() async {
+    ProgressoDeChutes? progresso;
+
     try {
       final dados = await ChutesStorage.carregarSessoes();
+      if (!mounted) return;
       setState(() => listaChutes = dados);
 
-      final progresso = await ChutesStorage.carregarProgressoAtual();
-      if (progresso != null && progresso['data'] == _hoje()) {
-        setState(() {
-          _chutesAtuais = progresso['chutes'];
-          _inicioSessao = DateTime.tryParse(progresso['horaInicio']);
-        });
-      } else if (progresso != null) {
-        // Progresso de outro dia — descarta
-        await ChutesStorage.limparProgressoAtual();
-      }
-    } catch (erro) {
+      progresso = await ChutesStorage.carregarProgressoAtual();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
-      );
+    } catch (erro) {
+      _avisar(FirestoreErro.mensagemAmigavel(erro));
+      return;
     }
+
+    final acao = retomadaPara(
+      progresso,
+      hoje: _hoje(),
+      meta: _metaChutes,
+      historico: listaChutes,
+      formatarHora: _formatarHora,
+    );
+
+    switch (acao) {
+      case RetomadaDeProgresso.nenhuma:
+        return;
+
+      case RetomadaDeProgresso.deOutroDia:
+        await _descartarProgresso(avisar: false);
+        return;
+
+      case RetomadaDeProgresso.irrecuperavel:
+        await _descartarProgresso(avisar: true);
+        return;
+
+      case RetomadaDeProgresso.restaurar:
+        _restaurarContagem(progresso!);
+        return;
+
+      case RetomadaDeProgresso.jaRegistrada:
+
+        _restaurarContagem(progresso!);
+        await _limparProgressoEReiniciar();
+        return;
+
+      case RetomadaDeProgresso.concluir:
+
+        _restaurarContagem(progresso!);
+        setState(() => _conclusaoPendente = true);
+        await _concluirSessaoPendente();
+        return;
+    }
+  }
+
+  void _restaurarContagem(ProgressoDeChutes progresso) {
+    setState(() {
+      _chutesAtuais = progresso.chutes;
+      _inicioSessao = progresso.inicio;
+      _idSessaoPendente = progresso.sessaoId;
+    });
+  }
+
+  Future<void> _descartarProgresso({required bool avisar}) async {
+    try {
+      await ChutesStorage.limparProgressoAtual();
+    } catch (_) {
+
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _chutesAtuais = 0;
+      _inicioSessao = null;
+      _idSessaoPendente = null;
+      _conclusaoPendente = false;
+    });
+
+    if (avisar) _avisar(mensagemProgressoIrrecuperavel);
   }
 
   String _hoje() {
@@ -74,6 +203,82 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
     return listaChutes.where((s) => s.data == hoje).toList().reversed.toList();
   }
 
+  Future<void> _limparProgressoEReiniciar() async {
+
+    bool limpou = false;
+    Object? erro;
+    try {
+      limpou = await ChutesStorage.limparProgressoAtual();
+    } catch (e) {
+      erro = e;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _chutesAtuais = 0;
+      _inicioSessao = null;
+      _idSessaoPendente = null;
+      _conclusaoPendente = false;
+      _salvando = false;
+    });
+
+    if (!limpou) {
+      _avisar(
+        erro != null ? FirestoreErro.mensagemAmigavel(erro) : mensagemSemSessao,
+      );
+    }
+  }
+
+  Future<void> _concluirSessaoPendente() async {
+    final inicio = _inicioSessao;
+    if (inicio == null || _salvando) return;
+
+    setState(() => _salvando = true);
+
+    ChuteSessao? gravada;
+    Object? erro;
+    try {
+
+      _idSessaoPendente ??= ChutesStorage.novoId();
+      final id = _idSessaoPendente;
+
+      if (id != null) {
+        gravada = await ChutesStorage.adicionar(
+          ChuteSessao(
+            id: id,
+            data: _hoje(),
+            horaInicio: _formatarHora(inicio),
+            horaFim: _formatarHora(DateTime.now()),
+            totalChutes: _metaChutes,
+            completa: true,
+          ),
+        );
+      }
+    } catch (e) {
+      erro = e;
+    }
+
+    if (!mounted) return;
+
+    if (gravada == null) {
+
+      setState(() => _salvando = false);
+      _avisar(
+        erro != null ? FirestoreErro.mensagemAmigavel(erro) : mensagemSemSessao,
+      );
+      return;
+    }
+
+    setState(() => listaChutes = comSessao(listaChutes, gravada!));
+
+    // Pequeno delay pra usuária ver a meta atingida antes de resetar
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+
+    await _limparProgressoEReiniciar();
+  }
+
   Future<void> _registrarChute() async {
     if (_chutesAtuais >= _metaChutes || _salvando) return;
 
@@ -85,62 +290,48 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
       _salvando = true;
     });
 
-    ChuteSessao? novaSessao;
-
+    bool gravou = false;
+    Object? erro;
     try {
+
+      _idSessaoPendente ??= ChutesStorage.novoId();
+
       // Salva o progresso a cada chute, para não perder se sair da tela
-      await ChutesStorage.salvarProgressoAtual(
-        chutes: _chutesAtuais,
-        data: _hoje(),
-        horaInicio: _inicioSessao!.toIso8601String(),
-      );
-
-      if (_chutesAtuais >= _metaChutes) {
-        _idSessaoPendente ??= ChutesStorage.novoId();
-
-        final fim = DateTime.now();
-        novaSessao = ChuteSessao(
+      gravou = await ChutesStorage.salvarProgressoAtual(
+        ProgressoDeChutes(
+          chutes: _chutesAtuais,
           data: _hoje(),
-          horaInicio: _formatarHora(_inicioSessao!),
-          horaFim: _formatarHora(fim),
-          totalChutes: _metaChutes,
-          completa: true,
-        );
-
-        listaChutes.add(novaSessao);
-        await ChutesStorage.adicionarSessao(novaSessao, id: _idSessaoPendente);
-        await ChutesStorage.limparProgressoAtual();
-      }
-    } catch (erro) {
-      if (novaSessao != null) {
-        listaChutes.remove(novaSessao);
-      }
-      if (!mounted) return;
-      setState(() {
-        _chutesAtuais = chutesAntes;
-        _salvando = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+          inicio: _inicioSessao,
+          sessaoId: _idSessaoPendente,
+        ),
       );
-      return;
+    } catch (e) {
+      erro = e;
     }
 
     if (!mounted) return;
 
-    if (_chutesAtuais >= _metaChutes) {
-      // Pequeno delay pra usuária ver a meta atingida antes de resetar
-      await Future.delayed(const Duration(milliseconds: 1200));
-      if (!mounted) return;
+    if (!gravou) {
       setState(() {
-        _chutesAtuais = 0;
-        _inicioSessao = null;
-        _idSessaoPendente = null;
+        _chutesAtuais = chutesAntes;
         _salvando = false;
       });
-    } else {
-      setState(() => _salvando = false);
+      _avisar(
+        erro != null ? FirestoreErro.mensagemAmigavel(erro) : mensagemSemSessao,
+      );
+      return;
     }
+
+    if (_chutesAtuais < _metaChutes) {
+      setState(() => _salvando = false);
+      return;
+    }
+
+    setState(() {
+      _conclusaoPendente = true;
+      _salvando = false;
+    });
+    await _concluirSessaoPendente();
   }
 
   Widget _dot(int index) {
@@ -162,6 +353,11 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final metaAtingida = _chutesAtuais >= _metaChutes;
+    // Enquanto a sessão não está no servidor o botão não pode se anunciar
+    // como concluído: fica roxo, oferecendo nova tentativa.
+    final corDoBotao = (metaAtingida && !_conclusaoPendente)
+        ? const Color(0xFF1D9E75)
+        : AppTheme.primaryPurple;
 
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
@@ -172,7 +368,10 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
           decoration: BoxDecoration(
             color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
+            border: Border.all(
+              color: AppColors.borderStrong(context),
+              width: 0.5,
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -182,7 +381,12 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
-                  border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: AppColors.border(context),
+                      width: 0.5,
+                    ),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,18 +396,39 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.chevron_left_rounded, color: AppColors.purpleLabel(context), size: 18),
+                          Icon(
+                            Icons.chevron_left_rounded,
+                            color: AppColors.purpleLabel(context),
+                            size: 18,
+                          ),
                           const SizedBox(width: 4),
-                          Text('Voltar', style: TextStyle(color: AppColors.purpleLabel(context), fontSize: 12)),
+                          Text(
+                            'Voltar',
+                            style: TextStyle(
+                              color: AppColors.purpleLabel(context),
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Text('Contador de Chutes',
-                        style: TextStyle(color: AppColors.textPrimary(context), fontSize: 20, fontWeight: FontWeight.w500)),
+                    Text(
+                      'Contador de Chutes',
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text('Meta: $_metaChutes movimentos em até 2h',
-                        style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
+                    Text(
+                      'Meta: $_metaChutes movimentos em até 2h',
+                      style: TextStyle(
+                        color: AppColors.textSecondary(context),
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -225,7 +450,9 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                             shape: BoxShape.circle,
                             color: AppColors.surface(context),
                             border: Border.all(
-                              color: metaAtingida ? const Color(0xFF1D9E75) : AppTheme.primaryPurple,
+                              color: metaAtingida
+                                  ? const Color(0xFF1D9E75)
+                                  : AppTheme.primaryPurple,
                               width: 4,
                             ),
                           ),
@@ -237,10 +464,18 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                                 style: TextStyle(
                                   fontSize: 42,
                                   fontWeight: FontWeight.w500,
-                                  color: metaAtingida ? const Color(0xFF1D9E75) : AppTheme.primaryPurple,
+                                  color: metaAtingida
+                                      ? const Color(0xFF1D9E75)
+                                      : AppTheme.primaryPurple,
                                 ),
                               ),
-                              Text('chutes', style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context))),
+                              Text(
+                                'chutes',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary(context),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -254,16 +489,20 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                     const SizedBox(height: 16),
                     Center(
                       child: GestureDetector(
-                        onTap: (metaAtingida || _salvando) ? null : _registrarChute,
+                        onTap: _salvando
+                            ? null
+                            : _conclusaoPendente
+                            ? _concluirSessaoPendente
+                            : (metaAtingida ? null : _registrarChute),
                         child: Container(
                           width: 130,
                           height: 130,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: metaAtingida ? const Color(0xFF1D9E75) : AppTheme.primaryPurple,
+                            color: corDoBotao,
                             boxShadow: [
                               BoxShadow(
-                                color: (metaAtingida ? const Color(0xFF1D9E75) : AppTheme.primaryPurple).withOpacity(0.3),
+                                color: corDoBotao.withOpacity(0.3),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -273,14 +512,27 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                metaAtingida ? Icons.check_circle_rounded : Icons.directions_walk_rounded,
+                                _conclusaoPendente
+                                    ? Icons.refresh_rounded
+                                    : metaAtingida
+                                    ? Icons.check_circle_rounded
+                                    : Icons.directions_walk_rounded,
                                 color: Colors.white,
                                 size: 32,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                metaAtingida ? 'Meta atingida!' : 'Registrar',
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                _conclusaoPendente
+                                    ? 'Tentar novamente'
+                                    : metaAtingida
+                                    ? 'Meta atingida!'
+                                    : 'Registrar',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
@@ -293,48 +545,89 @@ class _ChutesScreenState extends State<ChutesScreen> with SingleTickerProviderSt
                       decoration: BoxDecoration(
                         color: AppColors.surface(context),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppColors.border(context), width: 0.5),
+                        border: Border.all(
+                          color: AppColors.border(context),
+                          width: 0.5,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Sessões de hoje',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
+                          Text(
+                            'Sessões de hoje',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary(context),
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           if (_sessoesHoje.isEmpty)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               child: Text(
                                 'Nenhuma sessão registrada ainda hoje.',
-                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary(context)),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary(context),
+                                ),
                               ),
                             )
                           else
-                            ..._sessoesHoje.map((s) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(s.horaInicio,
-                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
-                                          Text('Concluída', style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
-                                        ],
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.statGreen(context),
-                                          borderRadius: BorderRadius.circular(20),
+                            ..._sessoesHoje.map(
+                              (s) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          s.horaInicio,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.textPrimary(
+                                              context,
+                                            ),
+                                          ),
                                         ),
-                                        child: Text('${s.totalChutes} chutes ✓',
-                                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF085041))),
+                                        Text(
+                                          'Concluída',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textMuted(context),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
                                       ),
-                                    ],
-                                  ),
-                                )),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.statGreen(context),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        '${s.totalChutes} chutes ✓',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF085041),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

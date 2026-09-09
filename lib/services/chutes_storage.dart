@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/chute_sessao.dart';
 
 class ChutesStorage {
+  static const String campoProgresso = 'chute_em_andamento';
+
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   static CollectionReference<Map<String, dynamic>>? get _colecao {
@@ -20,34 +22,20 @@ class ChutesStorage {
     return FirebaseFirestore.instance.collection('usuarios').doc(uid);
   }
 
+  static bool idEhEnderecavel(String id) => id.isNotEmpty && !id.contains('/');
+
   static String? novoId() => _colecao?.doc().id;
 
-  static Future<void> adicionarSessao(ChuteSessao sessao, {String? id}) async {
+  static Future<ChuteSessao?> adicionar(ChuteSessao sessao) async {
     final colecao = _colecao;
-    if (colecao == null) return;
-    final docId = id ?? colecao.doc().id;
-    await colecao.doc(docId).set(sessao.toMap());
-  }
+    if (colecao == null) return null;
 
-  /// Mantido para casos de sincronização completa (ex: se algum dia
-  /// precisar sobrescrever tudo). Evite usar no fluxo comum.
-  static Future<void> salvarSessoes(List<ChuteSessao> sessoes) async {
-    final colecao = _colecao;
-    if (colecao == null) return;
+    final idDaSessao = sessao.id ?? '';
+    final id = idEhEnderecavel(idDaSessao) ? idDaSessao : colecao.doc().id;
+    final gravada = sessao.comId(id);
 
-    final batch = FirebaseFirestore.instance.batch();
-
-    final existentes = await colecao.get();
-    for (final doc in existentes.docs) {
-      batch.delete(doc.reference);
-    }
-
-    for (final s in sessoes) {
-      final novoDoc = colecao.doc();
-      batch.set(novoDoc, s.toMap());
-    }
-
-    await batch.commit();
+    await colecao.doc(id).set(gravada.toMap());
+    return gravada;
   }
 
   static Future<List<ChuteSessao>> carregarSessoes() async {
@@ -55,42 +43,36 @@ class ChutesStorage {
     if (colecao == null) return [];
 
     final snapshot = await colecao.get();
-    return snapshot.docs.map((doc) => ChuteSessao.fromMap(doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => ChuteSessao.fromMap(doc.data(), idDoDocumento: doc.id))
+        .toList();
   }
 
-  // Progresso da sessão em andamento (não completa ainda)
-  static Future<void> salvarProgressoAtual({
-    required int chutes,
-    required String data,
-    required String horaInicio,
-  }) async {
+  static Future<bool> salvarProgressoAtual(ProgressoDeChutes progresso) async {
     final doc = _documentoConfig;
-    if (doc == null) return;
+    if (doc == null) return false;
 
-    await doc.set({
-      'chute_em_andamento': {
-        'chutes': chutes,
-        'data': data,
-        'horaInicio': horaInicio,
-      }
-    }, SetOptions(merge: true));
+    await doc.set({campoProgresso: progresso.toMap()}, SetOptions(merge: true));
+    return true;
   }
 
-  static Future<Map<String, dynamic>?> carregarProgressoAtual() async {
+  static Future<ProgressoDeChutes?> carregarProgressoAtual() async {
     final doc = _documentoConfig;
     if (doc == null) return null;
 
     final snapshot = await doc.get();
     if (!snapshot.exists) return null;
 
-    final valor = snapshot.data()?['chute_em_andamento'];
-    if (valor == null) return null;
-    return Map<String, dynamic>.from(valor);
+    return ProgressoDeChutes.deBruto(snapshot.data()?[campoProgresso]);
   }
 
-  static Future<void> limparProgressoAtual() async {
+  static Future<bool> limparProgressoAtual() async {
     final doc = _documentoConfig;
-    if (doc == null) return;
-    await doc.set({'chute_em_andamento': FieldValue.delete()}, SetOptions(merge: true));
+    if (doc == null) return false;
+
+    await doc.set({
+      campoProgresso: FieldValue.delete(),
+    }, SetOptions(merge: true));
+    return true;
   }
 }
