@@ -10,10 +10,9 @@ void main() {
   setUp(() => original = gestacaoAtual);
   tearDown(() => gestacaoAtual = original);
 
-  String fonteDe(String caminho) => File(caminho)
-      .readAsLinesSync()
-      .where((l) => !l.trimLeft().startsWith('//'))
-      .join('\n');
+  String fonteDe(String caminho) => File(
+    caminho,
+  ).readAsLinesSync().where((l) => !l.trimLeft().startsWith('//')).join('\n');
 
   group('GestacaoInfo — identidade', () {
     test('o id é opcional e nulo por padrão', () {
@@ -59,7 +58,7 @@ void main() {
     });
 
     test('iniciarGestacao descarta o id anterior', () {
-      // É o que impede herdar a identidade de quem estava logado antes.
+
       definirGestacao(DateTime(2026, 1, 5), 'gestacao-de-outra-usuaria');
 
       iniciarGestacao(DateTime(2026, 3, 1));
@@ -92,7 +91,10 @@ void main() {
       final codigo = fonte();
 
       expect(codigo, contains("static const String _campoId = 'gestacao_id';"));
-      expect(codigo, contains('{_campo: data.toIso8601String(), _campoId: id}'));
+      expect(
+        codigo,
+        contains('{_campo: data.toIso8601String(), _campoId: id}'),
+      );
       expect('SetOptions(merge: true)'.allMatches(codigo), hasLength(2));
       expect(codigo, contains("collection('usuarios').doc(uid)"));
     });
@@ -107,7 +109,6 @@ void main() {
       );
       expect(codigo, contains('definirGestacao(dum, idPersistido);'));
 
-      // O caminho que cunha vem depois, e só é alcançado sem id persistido.
       final adota = codigo.indexOf('definirGestacao(dum, idPersistido);');
       final cunha = codigo.indexOf('final id = novoGestacaoId();');
       expect(adota, greaterThan(-1));
@@ -118,7 +119,7 @@ void main() {
       final codigo = fonte();
 
       expect(codigo, contains('await doc.set({_campoId: id}'));
-      // Dois pontos de geração no arquivo: salvar e restaurar legado.
+
       expect('novoGestacaoId()'.allMatches(codigo), hasLength(3));
     });
 
@@ -131,26 +132,82 @@ void main() {
   });
 
   group('Onboarding — a primeira gestação declara identidade nova', () {
-    test('usa iniciarGestacao, não atualizarDUM', () {
+    test('a memória é escrita só pelo salvarDUM, depois da persistência', () {
       final codigo = fonteDe('lib/screens/onboarding_screen.dart');
 
-      expect(codigo, contains('iniciarGestacao(dum);'));
+      expect(codigo, isNot(contains('iniciarGestacao(')));
       expect(codigo, isNot(contains('atualizarDUM(')));
-      expect(codigo, contains('await GestacaoStorage.salvarDUM(dum);'));
-
-      // A ordem importa: sem id primeiro, cunhagem depois.
-      expect(
-        codigo.indexOf('iniciarGestacao(dum);'),
-        lessThan(codigo.indexOf('await GestacaoStorage.salvarDUM(dum);')),
-      );
+      expect(codigo, contains('await GestacaoStorage.salvarDUM(dum)'));
     });
 
-    test('o diálogo de edição não declara gestação nova', () {
+    test('o diálogo de edição não declara gestação nova nem cunha id', () {
       final codigo = fonteDe('lib/widgets/editar_dum_dialog.dart');
 
-      expect(codigo, contains('atualizarDUM(novaDum);'));
+      expect(codigo, isNot(contains('atualizarDUM(')));
       expect(codigo, isNot(contains('iniciarGestacao(')));
       expect(codigo, isNot(contains('novoGestacaoId(')));
+      expect(codigo, contains('await GestacaoStorage.salvarDUM(novaDum)'));
+    });
+  });
+
+  group('C1 — gestação configurada é declarada explicitamente', () {
+    String fonteDoStorage() => fonteDe('lib/services/gestacao_storage.dart');
+
+    test('o placeholder inicial não é uma gestação configurada', () {
+      encerrarGestacao();
+
+      expect(gestacaoAtual.configurada, isFalse);
+      expect(gestacaoAtual.id, isNull);
+    });
+
+    test('GestacaoInfo nasce não configurada por padrão', () {
+      expect(GestacaoInfo(dum: DateTime(2026, 1, 5)).configurada, isFalse);
+    });
+
+    test('iniciarGestacao marca como configurada', () {
+      iniciarGestacao(DateTime(2026, 1, 5));
+
+      expect(gestacaoAtual.configurada, isTrue);
+    });
+
+    test('definirGestacao marca como configurada', () {
+      definirGestacao(DateTime(2026, 1, 5), 'g1');
+
+      expect(gestacaoAtual.configurada, isTrue);
+      expect(gestacaoAtual.id, 'g1');
+    });
+
+    test('atualizarDUM marca como configurada e preserva o id', () {
+      definirGestacao(DateTime(2026, 1, 5), 'g1');
+      atualizarDUM(DateTime(2026, 1, 12));
+
+      expect(gestacaoAtual.configurada, isTrue);
+      expect(gestacaoAtual.id, 'g1');
+    });
+
+    test('encerrarGestacao volta a não configurada', () {
+      definirGestacao(DateTime(2026, 1, 5), 'g1');
+      encerrarGestacao();
+
+      expect(gestacaoAtual.configurada, isFalse);
+    });
+
+    test('salvarDUM sinaliza ausência de sessão em vez de silenciar', () {
+      final codigo = fonteDoStorage();
+
+      expect(codigo, contains('static Future<bool> salvarDUM(DateTime data)'));
+      expect(codigo, contains('if (doc == null) return false;'));
+      expect(codigo, contains('return true;'));
+    });
+
+    test('salvarDUM só toca a memória depois da escrita', () {
+      final codigo = fonteDoStorage();
+
+      final escrita = codigo.indexOf('await doc.set(');
+      final memoria = codigo.indexOf('definirGestacao(data, id)');
+
+      expect(escrita, greaterThan(-1));
+      expect(memoria, greaterThan(escrita));
     });
   });
 }

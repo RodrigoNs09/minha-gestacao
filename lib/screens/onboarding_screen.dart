@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/gestacao_data.dart';
+import '../services/firestore_error.dart';
 import '../services/gestacao_storage.dart';
 import '../theme/app_theme.dart';
 import '../main.dart';
@@ -11,12 +11,17 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+const String mensagemSemSessao =
+    'Não foi possível salvar: sessão expirada. Entre novamente.';
+
 enum _ModoInformar { semanas, dpp }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   _ModoInformar? _modo;
   int _semanasInformadas = 20;
   DateTime? _dppEscolhida;
+  bool _salvando = false;
+  String? _erro;
 
   Future<void> _escolherDPP() async {
     final data = await showDatePicker(
@@ -40,7 +45,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _continuar() async {
-    DateTime dum;
+    if (_salvando) return;
+
+    final DateTime dum;
 
     if (_modo == _ModoInformar.semanas) {
       dum = DateTime.now().subtract(Duration(days: _semanasInformadas * 7));
@@ -48,10 +55,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       dum = _dppEscolhida!.subtract(const Duration(days: 280));
     }
 
-    iniciarGestacao(dum);
-    await GestacaoStorage.salvarDUM(dum);
+    setState(() {
+      _salvando = true;
+      _erro = null;
+    });
+
+    bool salvou = false;
+    Object? erro;
+    try {
+
+      salvou = await GestacaoStorage.salvarDUM(dum);
+    } catch (e) {
+      erro = e;
+    }
 
     if (!mounted) return;
+
+    if (!salvou) {
+      setState(() {
+        _salvando = false;
+        _erro = erro != null
+            ? FirestoreErro.mensagemAmigavel(erro)
+            : mensagemSemSessao;
+      });
+      return;
+    }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -332,10 +361,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _campoDetalhe(),
                 ],
 
+                if (_erro != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      _erro!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppTheme.pink,
+                      ),
+                    ),
+                  ),
+
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _podeContinuar ? _continuar : null,
+                    onPressed: (_podeContinuar && !_salvando)
+                        ? _continuar
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryPurple,
                       disabledBackgroundColor: AppColors.textMuted(context),
@@ -344,19 +389,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text(
-                      'Continuar',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _salvando
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Continuar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: _pular,
+                  onPressed: _salvando ? null : _pular,
                   child: Text(
                     'Não sei, configurar depois',
                     style: TextStyle(

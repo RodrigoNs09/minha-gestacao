@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/contracoes_data.dart';
 import '../services/contracoes_storage.dart';
+import '../services/firestore_error.dart';
 
 class AnaliseScreen extends StatefulWidget {
   const AnaliseScreen({super.key});
@@ -18,10 +19,18 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
   }
 
   Future<void> _recarregar() async {
-    final dados = await ContracoesStorage.carregarContracoes();
-    setState(() {
-      listaContracoes = dados;
-    });
+    try {
+      final dados = await ContracoesStorage.carregarContracoes();
+      if (!mounted) return;
+      setState(() {
+        listaContracoes = dados;
+      });
+    } catch (erro) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirestoreErro.mensagemAmigavel(erro))),
+      );
+    }
   }
 
   int get total => listaContracoes.length;
@@ -103,7 +112,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
 
   bool get statusAtencao => total >= 4 && (fortes + moderadas) >= 2;
 
-  // CORREÇÃO: bar() agora retorna Column (sem Expanded)
   Widget _barColumn(double maxAltura, int count, int maxCount, String label, Color color) {
     final altura = maxCount == 0 ? 8.0 : (count / maxCount * maxAltura).clamp(8.0, maxAltura);
     return Column(

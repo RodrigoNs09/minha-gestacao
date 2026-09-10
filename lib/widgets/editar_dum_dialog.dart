@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/gestacao_data.dart';
+import '../services/firestore_error.dart';
 import '../services/gestacao_storage.dart';
 import '../services/vacinas_engine.dart' show adicionarDias;
 import '../theme/app_theme.dart';
@@ -12,13 +13,16 @@ DateTime dumAoConfirmarSemanas({
   required DateTime dumAtual,
   required DateTime hoje,
 }) {
-  // adicionarDias(x, 0) é a data civil de x, pela mesma fonte única.
+
   if (semanasInformadas == semanasIniciais) return adicionarDias(dumAtual, 0);
 
   return adicionarDias(hoje, -semanasInformadas * 7);
 }
 
 DateTime dumAoConfirmarDpp(DateTime dpp) => adicionarDias(dpp, -280);
+
+const String mensagemSemSessao =
+    'Não foi possível salvar: sessão expirada. Entre novamente.';
 
 Future<void> mostrarEditarDUM(
   BuildContext context,
@@ -28,6 +32,8 @@ Future<void> mostrarEditarDUM(
   final int semanasIniciais = gestacaoAtual.semanaAtual;
   int semanasInformadas = semanasIniciais;
   DateTime? dppEscolhida;
+  bool salvando = false;
+  String? erroDaGravacao;
 
   final resultado = await showModalBottomSheet<bool>(
     context: context,
@@ -39,6 +45,47 @@ Future<void> mostrarEditarDUM(
           bool podeConfirmar() {
             if (modo == _ModoInformar.semanas) return true;
             return dppEscolhida != null;
+          }
+
+          Future<void> confirmar() async {
+            if (salvando) return;
+
+            final DateTime novaDum = modo == _ModoInformar.semanas
+                ? dumAoConfirmarSemanas(
+                    semanasInformadas: semanasInformadas,
+                    semanasIniciais: semanasIniciais,
+                    dumAtual: gestacaoAtual.dum,
+                    hoje: DateTime.now(),
+                  )
+                : dumAoConfirmarDpp(dppEscolhida!);
+
+            setModalState(() {
+              salvando = true;
+              erroDaGravacao = null;
+            });
+
+            bool salvou = false;
+            Object? erro;
+            try {
+              salvou = await GestacaoStorage.salvarDUM(novaDum);
+            } catch (e) {
+              erro = e;
+            }
+
+            if (!ctx.mounted) return;
+
+            if (!salvou) {
+
+              setModalState(() {
+                salvando = false;
+                erroDaGravacao = erro != null
+                    ? FirestoreErro.mensagemAmigavel(erro)
+                    : mensagemSemSessao;
+              });
+              return;
+            }
+
+            Navigator.pop(ctx, true);
           }
 
           Future<void> escolherDPP() async {
@@ -297,11 +344,26 @@ Future<void> mostrarEditarDUM(
 
                 campoDetalhe(),
 
+                if (erroDaGravacao != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      erroDaGravacao!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppTheme.pink,
+                      ),
+                    ),
+                  ),
+
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
+                        onPressed: salvando
+                            ? null
+                            : () => Navigator.pop(ctx, false),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: AppColors.border(ctx)),
@@ -318,8 +380,8 @@ Future<void> mostrarEditarDUM(
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: podeConfirmar()
-                            ? () => Navigator.pop(ctx, true)
+                        onPressed: (podeConfirmar() && !salvando)
+                            ? confirmar
                             : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryPurple,
@@ -329,10 +391,19 @@ Future<void> mostrarEditarDUM(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text(
-                          'Salvar',
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        child: salvando
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Salvar',
+                                style: TextStyle(color: Colors.white),
+                              ),
                       ),
                     ),
                   ],
@@ -345,22 +416,5 @@ Future<void> mostrarEditarDUM(
     },
   );
 
-  if (resultado == true) {
-    DateTime novaDum;
-
-    if (modo == _ModoInformar.semanas) {
-      novaDum = dumAoConfirmarSemanas(
-        semanasInformadas: semanasInformadas,
-        semanasIniciais: semanasIniciais,
-        dumAtual: gestacaoAtual.dum,
-        hoje: DateTime.now(),
-      );
-    } else {
-      novaDum = dumAoConfirmarDpp(dppEscolhida!);
-    }
-
-    atualizarDUM(novaDum);
-    await GestacaoStorage.salvarDUM(novaDum);
-    aoSalvar();
-  }
+  if (resultado == true) aoSalvar();
 }

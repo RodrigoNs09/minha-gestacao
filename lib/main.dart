@@ -191,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _recarregar() async {
     try {
       final dados = await ContracoesStorage.carregarContracoes();
+      if (!mounted) return;
       setState(() {
         listaContracoes = dados;
       });
@@ -386,8 +387,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget gestacaoNaoConfiguradaCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () => mostrarEditarDUM(context, () => setState(() {})),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.statPurple(context), AppColors.statPink(context)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Informe sua gestação',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.accentText(context))),
+            const SizedBox(height: 6),
+            Text('Toque aqui para informar a semana ou a data prevista do parto.',
+                style: TextStyle(fontSize: 12, height: 1.35, color: AppColors.textPrimary(context))),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget gestacaoCard(BuildContext context) {
     final g = gestacaoAtual;
+    if (!g.configurada) return gestacaoNaoConfiguradaCard(context);
+
     final bebe = g.tamanhoBebe;
 
     return GestureDetector(
@@ -589,8 +621,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 decoration: BoxDecoration(
                                   color: AppColors.statPurple(context),
                                   shape: BoxShape.circle,
-                                  // withValues em vez de withOpacity: linha nova
-                                  // não deve somar mais um aviso de deprecação.
                                   border: Border.all(color: AppColors.accent(context).withValues(alpha: 0.2), width: 0.5),
                                 ),
                                 child: Icon(

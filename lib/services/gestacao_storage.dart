@@ -17,18 +17,19 @@ class GestacaoStorage {
   static String novoGestacaoId() =>
       FirebaseFirestore.instance.collection('usuarios').doc().id;
 
-  static Future<void> salvarDUM(DateTime data) async {
+  static Future<bool> salvarDUM(DateTime data) async {
     final doc = _documento;
-    if (doc == null) return;
+    if (doc == null) return false;
 
     final id = gestacaoAtual.id ?? novoGestacaoId();
 
     await doc.set(
       {_campo: data.toIso8601String(), _campoId: id},
-      SetOptions(merge: true), // não apaga outros campos do usuário
+      SetOptions(merge: true), 
     );
 
     definirGestacao(data, id);
+    return true;
   }
 
   static Future<DateTime?> carregarDUM() async {

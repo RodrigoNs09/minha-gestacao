@@ -2,10 +2,23 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suacontracao_ai/data/gestacao_data.dart';
 import 'package:suacontracao_ai/data/vacinas_calendario_2026.dart';
+import 'package:suacontracao_ai/models/gestacao_info.dart';
 import 'package:suacontracao_ai/screens/vacinas_screen.dart';
 
 void main() {
+  late GestacaoInfo gestacaoOriginal;
+
+  // A tela só avalia o calendário com gestação informada (C1). Sem isto
+  // todos os testes abaixo veriam o painel "informe sua gestação".
+  setUp(() {
+    gestacaoOriginal = gestacaoAtual;
+    definirGestacao(DateTime(2026, 1, 5), 'gestacao-de-teste');
+  });
+
+  tearDown(() => gestacaoAtual = gestacaoOriginal);
+
   List<String> linhasDeCodigo() {
     return File('lib/screens/vacinas_screen.dart')
         .readAsLinesSync()
@@ -35,28 +48,38 @@ void main() {
   }
 
   group('VacinasScreen — falha de leitura', () {
-    testWidgets('não quebra e mostra o painel de erro com retry', (tester) async {
+    testWidgets('não quebra e mostra o painel de erro com retry', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Não foi possível carregar seus registros'), findsOneWidget);
+      expect(
+        find.text('Não foi possível carregar seus registros'),
+        findsOneWidget,
+      );
       expect(find.text('Tentar novamente'), findsOneWidget);
     });
 
-    testWidgets('nenhum card de vacina é exibido quando a leitura falha',
-        (tester) async {
+    testWidgets('nenhum card de vacina é exibido quando a leitura falha', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
       await tester.pumpAndSettle();
 
       for (final regra in calendarioPni2026) {
-        expect(find.text(regra.nomeExibicao), findsNothing,
-            reason: regra.codigo);
+        expect(
+          find.text(regra.nomeExibicao),
+          findsNothing,
+          reason: regra.codigo,
+        );
       }
     });
 
-    testWidgets('nenhuma mensagem da engine aparece quando a leitura falha',
-        (tester) async {
+    testWidgets('nenhuma mensagem da engine aparece quando a leitura falha', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
       await tester.pumpAndSettle();
 
@@ -64,8 +87,9 @@ void main() {
       expect(find.text(mensagemGeralVacinas), findsNothing);
     });
 
-    testWidgets('nenhuma ação de registro aparece quando a leitura falha',
-        (tester) async {
+    testWidgets('nenhuma ação de registro aparece quando a leitura falha', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
       await tester.pumpAndSettle();
 
@@ -79,7 +103,9 @@ void main() {
       expect(find.text('Registros não reconhecidos'), findsNothing);
     });
 
-    testWidgets('o cabeçalho continua visível no estado de erro', (tester) async {
+    testWidgets('o cabeçalho continua visível no estado de erro', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
       await tester.pumpAndSettle();
 
@@ -88,8 +114,9 @@ void main() {
       expect(find.text('Voltar'), findsOneWidget);
     });
 
-    testWidgets('mostra indicador de carregamento antes de concluir',
-        (tester) async {
+    testWidgets('mostra indicador de carregamento antes de concluir', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -129,10 +156,14 @@ void main() {
       expect(abertura, contains('_avaliadoEm = DateTime.now();'));
       expect(abertura, contains('_dum = gestacaoAtual.dum;'));
 
-      expect(corpoDoMetodo('List<StatusVacinacao> _avaliar()'),
-          isNot(contains('DateTime.now()')));
-      expect(corpoDoMetodo('Future<void> _carregar()'),
-          isNot(contains('DateTime.now()')));
+      expect(
+        corpoDoMetodo('List<StatusVacinacao> _avaliar()'),
+        isNot(contains('DateTime.now()')),
+      );
+      expect(
+        corpoDoMetodo('Future<void> _carregar()'),
+        isNot(contains('DateTime.now()')),
+      );
     });
 
     test('o relógio da tela não fica congelado após um salvamento', () {
@@ -148,7 +179,9 @@ void main() {
       // Gravação e remoção renovam a avaliação nos seus próprios métodos.
       expect(
         fonteNormalizada(),
-        contains('_historico = lista; _idPendente = null; _abrirNovaAvaliacao();'),
+        contains(
+          '_historico = lista; _idPendente = null; _abrirNovaAvaliacao();',
+        ),
       );
       expect(
         fonteNormalizada(),
@@ -181,8 +214,10 @@ void main() {
       expect(codigo, contains('apresentacaoDe(status.estado)'));
       expect(codigo, isNot(contains('Color(0x')));
       // Colors.white e Colors.transparent são chrome do sheet, não paleta.
-      expect(codigo,
-          isNot(matches(RegExp(r'\bColors\.(?!white|transparent)'))));
+      expect(
+        codigo,
+        isNot(matches(RegExp(r'\bColors\.(?!white|transparent)'))),
+      );
     });
 
     test('quem decide se cabe registrar é a engine', () {
@@ -253,8 +288,9 @@ void main() {
 
       final corpo = corpoDoMetodo('Future<void> _abrirFormulario(');
 
-      final gera =
-          corpo.indexOf('_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();');
+      final gera = corpo.indexOf(
+        '_idPendente = edicaoDe?.id ?? VacinasStorage.novoId();',
+      );
       final abre = corpo.indexOf('await showModalBottomSheet<void>');
       final limpa = corpo.indexOf('setState(() => _idPendente = null);');
 
@@ -345,7 +381,10 @@ void main() {
       final codigo = fonte();
 
       expect(codigo, contains('regraDaVacina is RegraDependeHistorico'));
-      expect(codigo, contains('final regraDaVacina = regraPorCodigo(vacinaCodigo)'));
+      expect(
+        codigo,
+        contains('final regraDaVacina = regraPorCodigo(vacinaCodigo)'),
+      );
 
       for (final codigoDeVacina in [
         'codigoHepatiteB',
@@ -360,25 +399,28 @@ void main() {
       }
     });
 
-    test('as quatro situações do modelo são oferecidas, sem inventar rótulo',
-        () {
-      final codigo = fonte();
+    test(
+      'as quatro situações do modelo são oferecidas, sem inventar rótulo',
+      () {
+        final codigo = fonte();
 
-      expect(codigo, contains('SituacaoInformada.values.map'));
-      expect(codigo, contains("'Aplicada com data'"));
-      expect(codigo, contains("'Aplicada, mas não sei a data'"));
-      expect(codigo, contains("'Não aplicada'"));
-      expect(codigo, contains("'Não sei informar'"));
-      expect(codigo, contains("'Situação da vacinação'"));
-      expect(codigo, contains("'Data da aplicação'"));
-      expect(codigo, contains("'Número da dose'"));
-    });
+        expect(codigo, contains('SituacaoInformada.values.map'));
+        expect(codigo, contains("'Aplicada com data'"));
+        expect(codigo, contains("'Aplicada, mas não sei a data'"));
+        expect(codigo, contains("'Não aplicada'"));
+        expect(codigo, contains("'Não sei informar'"));
+        expect(codigo, contains("'Situação da vacinação'"));
+        expect(codigo, contains("'Data da aplicação'"));
+        expect(codigo, contains("'Número da dose'"));
+      },
+    );
 
     test('só a situação com data envia dataAplicacao', () {
       expect(
         fonte(),
         contains(
-            'dataAplicacao: situacao == SituacaoInformada.aplicadaComData'),
+          'dataAplicacao: situacao == SituacaoInformada.aplicadaComData',
+        ),
       );
     });
 
@@ -421,8 +463,7 @@ void main() {
       expect(codigo, isNot(contains('canPop')));
     });
 
-    test('a falha mostra a mensagem do FirestoreErro e mantém o formulário',
-        () {
+    test('a falha mostra a mensagem do FirestoreErro e mantém o formulário', () {
       final codigo = fonte();
 
       expect(codigo, contains('FirestoreErro.mensagemAmigavel(falha)'));
@@ -433,7 +474,6 @@ void main() {
       expect('Navigator.pop(ctx'.allMatches(formulario), hasLength(2));
       expect(formulario, contains('if (!ctx.mounted) return;'));
     });
-
   });
 
   group('VacinasScreen — edição', () {
@@ -514,10 +554,7 @@ void main() {
           ': temporadaDeNovoRegistro',
         ),
       );
-      expect(
-        normalizada,
-        isNot(contains('edicaoDe?.temporadaNoRegistro ??')),
-      );
+      expect(normalizada, isNot(contains('edicaoDe?.temporadaNoRegistro ??')));
       expect(
         normalizada,
         contains('criadoEm: edicaoDe?.criadoEm ?? DateTime.now()'),
@@ -629,7 +666,9 @@ void main() {
       final normalizada = fonteNormalizada();
       expect(
         normalizada,
-        contains('onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\''),
+        contains(
+          'onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\'',
+        ),
       );
       expect(normalizada, isNot(contains('onPressed: salvando ? null')));
       expect(
@@ -667,8 +706,11 @@ void main() {
         'void _registrarSalvo(',
         'void _registrarRemocao(',
       ]) {
-        expect(corpoDoMetodo(metodo), contains('if (!mounted) return;'),
-            reason: metodo);
+        expect(
+          corpoDoMetodo(metodo),
+          contains('if (!mounted) return;'),
+          reason: metodo,
+        );
       }
 
       expect(codigo, contains('_registrarSalvo(gravado);'));
@@ -731,8 +773,7 @@ void main() {
   });
 
   group('VacinasScreen — registros não reconhecidos', () {
-    String corpoDoBloco() =>
-        corpoDoMetodo('Widget _blocoNaoReconhecidos(');
+    String corpoDoBloco() => corpoDoMetodo('Widget _blocoNaoReconhecidos(');
 
     test('5. o código desconhecido não é associado a nenhum card', () {
       // A associação do card é por igualdade exata; um código fora do
@@ -845,8 +886,7 @@ void main() {
   });
 
   group('VacinasScreen — exclusão', () {
-    String corpoDaExclusao() =>
-        corpoDoMetodo('Future<void> _excluirRegistro(');
+    String corpoDaExclusao() => corpoDoMetodo('Future<void> _excluirRegistro(');
 
     test('existe ação de excluir, ligada ao registro daquela linha', () {
       final codigo = fonte();
@@ -860,8 +900,10 @@ void main() {
       // Recebe o registro inteiro, não um código de vacina.
       expect(
         codigo,
-        contains('Future<void> _excluirRegistro(\n    BuildContext context,\n'
-            '    RegistroVacinacao registro,\n  )'),
+        contains(
+          'Future<void> _excluirRegistro(\n    BuildContext context,\n'
+          '    RegistroVacinacao registro,\n  )',
+        ),
       );
     });
 
@@ -895,9 +937,7 @@ void main() {
       expect(corpo, contains("'Excluir registro?'"));
       expect(
         corpo,
-        contains(
-          'Esse registro será removido do seu histórico de ',
-        ),
+        contains('Esse registro será removido do seu histórico de '),
       );
       expect(corpo, contains("'Cancelar'"));
       expect(corpo, contains("'Excluir'"));
@@ -913,7 +953,9 @@ void main() {
 
       expect(
         fonteNormalizada(),
-        contains('onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\''),
+        contains(
+          'onPressed: () => Navigator.pop(ctx), child: Text( \'Cancelar\'',
+        ),
       );
       // O remover está dentro de confirmar(), que é o onPressed do Excluir.
       expect(corpo, contains('onPressed: excluindo ? null : confirmar'));
@@ -980,6 +1022,94 @@ void main() {
       expect('Future<void> _excluirRegistro('.allMatches(codigo), hasLength(1));
       expect('Future<void> _abrirFormulario('.allMatches(codigo), hasLength(1));
       expect('VacinasEngine.avaliar('.allMatches(codigo), hasLength(1));
+    });
+  });
+
+  group('C1 — sem gestação informada a tela não avalia nem grava', () {
+    Future<void> montarSemGestacao(WidgetTester tester) async {
+      encerrarGestacao();
+      await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('mostra o convite para informar a gestação', (tester) async {
+      await montarSemGestacao(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(mensagemSemGestacaoConfigurada), findsOneWidget);
+      expect(
+        mensagemSemGestacaoConfigurada,
+        'Informe a data da sua gestação para ver o calendário de vacinas.',
+      );
+    });
+
+    testWidgets('nenhum card de vacina é avaliado', (tester) async {
+      await montarSemGestacao(tester);
+
+      for (final regra in calendarioPni2026) {
+        expect(
+          find.text(regra.nomeExibicao),
+          findsNothing,
+          reason: regra.codigo,
+        );
+      }
+    });
+
+    testWidgets('não oferece o painel de erro nem retry', (tester) async {
+      await montarSemGestacao(tester);
+
+      expect(
+        find.text('Não foi possível carregar seus registros'),
+        findsNothing,
+      );
+      expect(find.text('Tentar novamente'), findsNothing);
+    });
+
+    test('o formulário recusa abrir sem gestação informada', () {
+      final codigo = linhasDeCodigo().join('\n');
+      final inicio = codigo.indexOf('Future<void> _abrirFormulario(');
+      final corpo = codigo.substring(inicio, codigo.indexOf('\n  }\n', inicio));
+
+      expect(corpo, contains('if (_semGestacao) return;'));
+    });
+
+    test('a decisão vem de gestacaoAtual.configurada', () {
+      final codigo = linhasDeCodigo().join('\n');
+
+      expect(
+        codigo,
+        contains('final bool _semGestacao = !gestacaoAtual.configurada;'),
+      );
+      expect(codigo, contains('if (_semGestacao) return _painelSemGestacao'));
+    });
+
+    test('a avaliação só acontece depois da checagem', () {
+      final codigo = linhasDeCodigo().join('\n');
+      final inicio = codigo.indexOf('Widget _conteudo(BuildContext context)');
+      final corpo = codigo.substring(inicio, codigo.indexOf('\n  }\n', inicio));
+
+      final checagem = corpo.indexOf('if (_semGestacao)');
+      final avaliacao = corpo.indexOf('_avaliar()');
+
+      expect(checagem, greaterThan(-1));
+      expect(avaliacao, greaterThan(checagem));
+    });
+  });
+
+  group('C1 — regressão: com gestação informada nada muda', () {
+    testWidgets('a falha de leitura continua mostrando o painel de erro', (
+      tester,
+    ) async {
+      definirGestacao(DateTime(2026, 1, 5), 'gestacao-de-teste');
+
+      await tester.pumpWidget(const MaterialApp(home: VacinasScreen()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Não foi possível carregar seus registros'),
+        findsOneWidget,
+      );
+      expect(find.text(mensagemSemGestacaoConfigurada), findsNothing);
     });
   });
 }

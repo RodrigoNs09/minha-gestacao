@@ -60,6 +60,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
   Future<void> _carregar() async {
     try {
       final dados = await ConsultasStorage.carregarConsultas();
+      if (!mounted) return;
       setState(() => listaConsultas = dados);
     } catch (erro) {
       if (!mounted) return;

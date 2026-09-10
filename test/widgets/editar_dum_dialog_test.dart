@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suacontracao_ai/data/gestacao_data.dart';
+import 'package:suacontracao_ai/models/gestacao_info.dart';
 import 'package:suacontracao_ai/widgets/editar_dum_dialog.dart';
 
 void main() {
@@ -190,6 +195,175 @@ void main() {
 
       expect(a, b);
       expect(dumAoConfirmarDpp(DateTime(2026, 10, 12)), DateTime(2026, 1, 5));
+    });
+  });
+
+  group('A2 — gravar primeiro, só então mexer na memória', () {
+    late GestacaoInfo gestacaoOriginal;
+
+    setUp(() {
+      gestacaoOriginal = gestacaoAtual;
+      definirGestacao(DateTime(2026, 1, 5), 'gestacao-1');
+    });
+
+    tearDown(() => gestacaoAtual = gestacaoOriginal);
+
+    void ignorarOverflowDeLayout() {
+      final anterior = FlutterError.onError;
+      FlutterError.onError = (detalhes) {
+        if (detalhes.exceptionAsString().contains('overflowed')) return;
+        anterior?.call(detalhes);
+      };
+      addTearDown(() => FlutterError.onError = anterior);
+    }
+
+    Future<void> abrirFolha(WidgetTester tester) async {
+      ignorarOverflowDeLayout();
+
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => mostrarEditarDUM(context, () {}),
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a folha abre com o botão Salvar habilitado', (tester) async {
+      await abrirFolha(tester);
+
+      final botao = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Salvar'),
+      );
+
+      expect(botao.onPressed, isNotNull);
+    });
+
+    testWidgets('falha ao gravar mantém a folha aberta e avisa', (
+      tester,
+    ) async {
+      await abrirFolha(tester);
+
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Salvar'), findsOneWidget);
+      expect(find.textContaining('Tente novamente'), findsOneWidget);
+    });
+
+    testWidgets('falha ao gravar não altera a DUM em memória', (tester) async {
+      await abrirFolha(tester);
+
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(gestacaoAtual.dum, DateTime(2026, 1, 5));
+      expect(gestacaoAtual.id, 'gestacao-1');
+    });
+
+    testWidgets('segundo toque em Salvar não dispara segunda escrita', (
+      tester,
+    ) async {
+      await abrirFolha(tester);
+
+      await tester.tap(find.text('Salvar'));
+      await tester.tap(find.text('Salvar'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(gestacaoAtual.dum, DateTime(2026, 1, 5));
+    });
+
+    testWidgets('cancelar fecha sem tocar na memória', (tester) async {
+      await abrirFolha(tester);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salvar'), findsNothing);
+      expect(gestacaoAtual.dum, DateTime(2026, 1, 5));
+    });
+  });
+
+  group('Estrutural — A2', () {
+    String fonte() => File('lib/widgets/editar_dum_dialog.dart')
+        .readAsLinesSync()
+        .where((linha) => !linha.trimLeft().startsWith('//'))
+        .join('\n');
+
+    String corpoDeConfirmar() {
+      final codigo = fonte();
+      final inicio = codigo.indexOf('Future<void> confirmar() async {');
+      expect(inicio, greaterThan(-1));
+
+      final fim = codigo.indexOf('\n          }\n', inicio);
+      expect(fim, greaterThan(inicio));
+
+      return codigo.substring(inicio, fim);
+    }
+
+    test('a gravação acontece antes de fechar a folha', () {
+      final corpo = corpoDeConfirmar();
+
+      final escrita = corpo.indexOf('await GestacaoStorage.salvarDUM(');
+      final fechamento = corpo.indexOf('Navigator.pop(ctx, true)');
+
+      expect(escrita, greaterThan(-1));
+      expect(fechamento, greaterThan(escrita));
+    });
+
+    test('o caminho de falha retorna antes de fechar', () {
+      final corpo = corpoDeConfirmar();
+
+      final falha = corpo.indexOf('if (!salvou)');
+      final fechamento = corpo.indexOf('Navigator.pop(ctx, true)');
+
+      expect(falha, greaterThan(-1));
+      expect(falha, lessThan(fechamento));
+      expect(corpo.substring(falha, fechamento), contains('return;'));
+    });
+
+    test('duplo toque é bloqueado dentro de confirmar', () {
+      expect(corpoDeConfirmar(), contains('if (salvando) return;'));
+    });
+
+    test('o botão Salvar respeita o estado de gravação', () {
+      expect(fonte(), contains('(podeConfirmar() && !salvando)'));
+    });
+
+    test('aoSalvar só roda com resultado true', () {
+      expect(fonte(), contains('if (resultado == true) aoSalvar();'));
+    });
+
+    test('a tela não escreve na memória — quem escreve é o storage', () {
+      final codigo = fonte();
+
+      expect(codigo, isNot(contains('atualizarDUM(')));
+      expect(codigo, isNot(contains('definirGestacao(')));
+      expect(codigo, isNot(contains('iniciarGestacao(')));
+    });
+
+    test('mounted do contexto da folha é checado depois do await', () {
+      final corpo = corpoDeConfirmar();
+
+      final espera = corpo.indexOf('await GestacaoStorage.salvarDUM(');
+      final guarda = corpo.indexOf('if (!ctx.mounted) return;', espera);
+
+      expect(guarda, greaterThan(espera));
     });
   });
 }

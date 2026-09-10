@@ -79,6 +79,14 @@ void main() {
       expect(gestacaoAtual.id, isNull);
     });
 
+    test('a gestação deixa de estar configurada', () {
+      definirGestacao(DateTime(2026, 1, 5), 'gestacao-1');
+
+      encerrarGestacao();
+
+      expect(gestacaoAtual.configurada, isFalse);
+    });
+
     test('restaura um placeholder utilizável, não um nulo', () {
       definirGestacao(DateTime(2026, 1, 5), 'gestacao-1');
 
@@ -125,6 +133,7 @@ void main() {
 
       limparEstadoDaSessao();
 
+      expect(gestacaoAtual.configurada, isFalse);
       expect(gestacaoAtual.id, isNull);
       expect(gestacaoAtual.dum, isNot(DateTime(2026, 1, 5)));
     });

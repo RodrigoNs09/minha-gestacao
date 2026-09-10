@@ -67,12 +67,14 @@ class _SintomasScreenState extends State<SintomasScreen> {
   Future<void> _carregar() async {
     try {
       final dados = await SintomasStorage.carregarRegistros();
+      if (!mounted) return;
       setState(() => listaSintomas = dados);
 
       final hoje = _hoje();
       final registroHoje = listaSintomas.where((r) => r.data == hoje).toList();
       if (registroHoje.isNotEmpty) {
         final r = registroHoje.first;
+        if (!mounted) return;
         setState(() {
           _humorSelecionado = r.humor;
           _sintomasSelecionados.addAll(r.sintomas);

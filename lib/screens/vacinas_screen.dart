@@ -9,6 +9,9 @@ import '../services/vacinas_engine.dart';
 import '../services/vacinas_storage.dart';
 import '../theme/app_theme.dart';
 
+const String mensagemSemGestacaoConfigurada =
+    'Informe a data da sua gestação para ver o calendário de vacinas.';
+
 class VacinasScreen extends StatefulWidget {
   const VacinasScreen({super.key});
 
@@ -17,6 +20,9 @@ class VacinasScreen extends StatefulWidget {
 }
 
 class _VacinasScreenState extends State<VacinasScreen> {
+
+  final bool _semGestacao = !gestacaoAtual.configurada;
+
   bool _carregando = true;
   String? _erro;
 
@@ -53,7 +59,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
     if (!mounted) return;
 
     setState(() {
-
       _historico = [...?_historico]..removeWhere((r) => r.id == id);
       _abrirNovaAvaliacao();
     });
@@ -172,7 +177,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
     BuildContext context,
     RegistroVacinacao registro,
   ) async {
-
     final id = registro.id;
     if (id == null) return;
 
@@ -205,7 +209,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
               _excluindoId = null;
 
               if (removeu == true) {
-
                 _registrarRemocao(id);
                 if (ctx.mounted) Navigator.pop(ctx);
                 return;
@@ -270,7 +273,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
               ),
               actions: [
                 TextButton(
-
                   onPressed: () => Navigator.pop(ctx),
                   child: Text(
                     'Cancelar',
@@ -306,6 +308,8 @@ class _VacinasScreenState extends State<VacinasScreen> {
     String vacinaCodigo, {
     RegistroVacinacao? edicaoDe,
   }) async {
+
+    if (_semGestacao) return;
 
     if (_gravando) return;
 
@@ -410,7 +414,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
               _gravando = false;
 
               if (gravado != null) {
-
                 _registrarSalvo(gravado);
                 if (ctx.mounted) Navigator.pop(ctx);
                 return;
@@ -681,7 +684,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-
                           onPressed: () => Navigator.pop(ctx),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1095,10 +1097,40 @@ class _VacinasScreenState extends State<VacinasScreen> {
     );
   }
 
+  Widget _painelSemGestacao(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_note_rounded,
+              size: 36,
+              color: AppColors.textMuted(context),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              mensagemSemGestacaoConfigurada,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _conteudo(BuildContext context) {
     if (_carregando) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    if (_semGestacao) return _painelSemGestacao(context);
 
     final erro = _erro;
     if (erro != null) return _painelDeErro(context, erro);

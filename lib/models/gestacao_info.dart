@@ -5,7 +5,9 @@ class GestacaoInfo {
 
   final String? id;
 
-  GestacaoInfo({required this.dum, this.id});
+  final bool configurada;
+
+  GestacaoInfo({required this.dum, this.id, this.configurada = false});
 
   int get diasGestacao => diasDeCalendarioEntre(dum, DateTime.now());
 
