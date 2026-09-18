@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/data/consultas_data.dart';
 import 'package:suacontracao_ai/models/consulta.dart';
 import 'package:suacontracao_ai/screens/agenda_screen.dart';
+import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 
 void main() {
   tearDown(() => listaConsultas = []);
@@ -57,36 +58,41 @@ void main() {
     hora: 'xx',
   );
 
-  void ignorarOverflowDeLayout() {
-    final anterior = FlutterError.onError;
-    FlutterError.onError = (detalhes) {
-      if (detalhes.exceptionAsString().contains('overflowed')) return;
-      anterior?.call(detalhes);
-    };
-    addTearDown(() => FlutterError.onError = anterior);
-  }
-
-  Future<void> montar(WidgetTester tester) async {
-    ignorarOverflowDeLayout();
-
-    tester.view.physicalSize = const Size(1000, 2400);
+  // Sem supressor de overflow e sem reduzir a escala de texto: o layout
+  // precisa caber de verdade. Qualquer RenderFlex que estoure aqui faz o
+  // teste falhar, que é o comportamento desejado.
+  Future<void> montar(
+    WidgetTester tester, {
+    Size tamanho = const Size(360, 800),
+    double escalaDeTexto = 1.0,
+  }) async {
+    tester.view.physicalSize = tamanho;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // A fonte de teste é bem mais larga que a real e estoura o cabeçalho de
-    // 300px, deixando o "+ Nova" fora da área clicável. Reduzir a escala
-    // reproduz a proporção do aparelho sem tocar na tela.
     await tester.pumpWidget(
       MaterialApp(
         home: const AgendaScreen(),
         builder: (context, child) => MediaQuery.withClampedTextScaling(
-          minScaleFactor: 0.6,
-          maxScaleFactor: 0.6,
+          minScaleFactor: escalaDeTexto,
+          maxScaleFactor: escalaDeTexto,
           child: child!,
         ),
       ),
     );
+    await tester.pumpAndSettle();
+  }
+
+  // O teclado sobe DEPOIS que a folha já está aberta, que é a ordem real.
+  // Aplicar o inset antes encolheria o Scaffold de trás e o "+ Nova" nem
+  // chegaria a existir na tela.
+  Future<void> abrirTeclado(
+    WidgetTester tester, {
+    double altura = 230,
+  }) async {
+    tester.view.viewInsets = FakeViewPadding(bottom: altura);
+    addTearDown(tester.view.resetViewInsets);
     await tester.pumpAndSettle();
   }
 
@@ -648,6 +654,357 @@ void main() {
 
       expect(leitura, contains('colecao.get()'));
       expect('colecao.get()'.allMatches(storage), hasLength(1));
+    });
+  });
+
+  group('Responsividade — sem moldura fixa', () {
+    // Nenhum teste deste grupo suprime overflow. Se o layout estourar, o
+    // FlutterError vira exceção e o teste falha — que é o objetivo.
+
+    testWidgets('cabe numa tela pequena', (tester) async {
+      await montar(tester, tamanho: const Size(320, 640));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Agenda'), findsOneWidget);
+      expect(find.text('+ Nova'), findsOneWidget);
+    });
+
+    testWidgets('cabe em paisagem', (tester) async {
+      await montar(tester, tamanho: const Size(800, 360));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Agenda'), findsOneWidget);
+      expect(find.text('PRÓXIMAS'), findsOneWidget);
+    });
+
+    testWidgets('cabe com fonte ampliada', (tester) async {
+      await montar(tester, escalaDeTexto: 2.0);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('+ Nova'), findsOneWidget);
+    });
+
+    testWidgets('o botão + Nova continua clicável em tela pequena', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(320, 640));
+
+      // Sem warnIfMissed: um hit-test que erra o alvo faz o teste falhar.
+      await tester.tap(find.text('+ Nova'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nova consulta'), findsOneWidget);
+    });
+
+    testWidgets('o botão + Nova continua clicável com fonte ampliada', (
+      tester,
+    ) async {
+      await montar(tester, escalaDeTexto: 1.6);
+
+      await tester.tap(find.text('+ Nova'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Nova consulta'), findsOneWidget);
+    });
+
+    testWidgets('o formulário cabe em tela pequena', (tester) async {
+      await montar(tester, tamanho: const Size(320, 640));
+
+      await tester.tap(find.text('+ Nova'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Adicionar'), findsOneWidget);
+      expect(find.text('Cancelar'), findsOneWidget);
+    });
+
+    testWidgets('ocupa a largura disponível numa tela estreita', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(360, 800));
+
+      // 360 menos os 12 de padding de cada lado; o 1 de tolerância é a
+      // borda de 0,5 px do cartão. Antes era fixo em 300.
+      final largura = tester.getSize(find.byType(ListView)).width;
+
+      expect(largura, closeTo(336, 1));
+      expect(largura, greaterThan(300));
+    });
+
+    testWidgets('não estica além do máximo numa tela larga', (tester) async {
+      await montar(tester, tamanho: const Size(1200, 900));
+
+      expect(tester.getSize(find.byType(ListView)).width, closeTo(400, 1));
+    });
+
+    test('a moldura não depende mais de tamanho fixo', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Widget build(BuildContext context)',
+      );
+
+      expect(corpo, isNot(contains('width: 300')));
+      expect(corpo, isNot(contains('minHeight: 620')));
+
+      // A moldura agora vem do widget compartilhado. Exigir aqui o
+      // SafeArea/ConstrainedBox voltaria a permitir que a tela reimplemente
+      // a estrutura por conta própria, que é o que se quer impedir.
+      expect(corpo, contains('MolduraResponsiva('));
+      expect(corpo, isNot(contains('BoxConstraints(maxWidth:')));
+      expect(corpo, isNot(contains('BorderRadius.circular(36)')));
+    });
+
+    testWidgets('a tela usa mesmo o widget compartilhado', (tester) async {
+      await montar(tester);
+
+      // Não basta o código citar o nome: o widget precisa estar na árvore.
+      expect(find.byType(MolduraResponsiva), findsOneWidget);
+    });
+
+    test('o título do cabeçalho é flexível', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Widget build(BuildContext context)',
+      );
+
+      final titulo = corpo.indexOf("Text('Agenda'");
+      final expandedAntes = corpo.lastIndexOf('Expanded(', titulo);
+      final rowAntes = corpo.lastIndexOf('Row(', titulo);
+
+      expect(expandedAntes, greaterThan(rowAntes));
+      expect(corpo, contains('overflow: TextOverflow.ellipsis'));
+    });
+  });
+
+  // O ponto cego que a validação no Motorola G10 revelou: até aqui nenhum
+  // teste de responsividade tinha consulta na lista, então _consultaCard
+  // nunca era construído e o badge de data nunca era exercitado.
+  group('Responsividade — com consulta renderizada', () {
+    final umaQuinta = DateTime(2026, 10, 15);
+
+    setUp(() {
+      listaConsultas = [
+        consulta(id: 'c1', titulo: 'Pré-natal', data: comoData(umaQuinta)),
+      ];
+    });
+
+    testWidgets('o card aparece mesmo — o teste anterior não o renderizava', (
+      tester,
+    ) async {
+      await montar(tester);
+
+      expect(find.text('Pré-natal'), findsOneWidget);
+      expect(find.text('Qui'), findsOneWidget);
+      expect(find.text('15'), findsOneWidget);
+      expect(find.text('Out'), findsOneWidget);
+    });
+
+    for (final escala in [1.3, 1.5, 2.0]) {
+      testWidgets('o badge da data cabe com fonte $escala', (tester) async {
+        await montar(tester, escalaDeTexto: escala);
+
+        // Um RenderFlex estourado vira exceção e reprova o teste sozinho;
+        // a checagem explícita deixa a intenção clara.
+        expect(tester.takeException(), isNull);
+
+        // Nada de esconder texto: os três continuam legíveis.
+        expect(find.text('Qui'), findsOneWidget);
+        expect(find.text('15'), findsOneWidget);
+        expect(find.text('Out'), findsOneWidget);
+      });
+    }
+
+    testWidgets('o badge cabe com fonte ampliada em tela pequena', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        tamanho: const Size(320, 640),
+        escalaDeTexto: 1.5,
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Out'), findsOneWidget);
+    });
+
+    testWidgets('o badge cresce com a fonte em vez de estourar', (
+      tester,
+    ) async {
+      Size badge() => tester.getSize(
+        find.ancestor(
+          of: find.text('Qui'),
+          matching: find.byType(Container),
+        ).first,
+      );
+
+      await montar(tester);
+      final normal = badge();
+
+      // A altura em escala normal é exatamente a de antes da correção.
+      // (A largura depende da fonte: a do ambiente de teste é bem mais
+      // larga que a Roboto do aparelho, então aqui só checamos o mínimo.)
+      expect(normal.height, 52);
+      expect(normal.width, greaterThanOrEqualTo(44));
+
+      await montar(tester, escalaDeTexto: 1.5);
+      final ampliado = badge();
+
+      // Cresce em vez de estourar, e sem explodir de tamanho.
+      expect(ampliado.height, greaterThan(normal.height));
+      expect(ampliado.width, lessThan(normal.width * 2));
+    });
+
+    test('o badge não usa mais altura fixa', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Widget _consultaCard(Consulta c,',
+      );
+
+      expect(corpo, isNot(contains('height: 52')));
+      expect(corpo, contains('minHeight: 52'));
+    });
+  });
+
+  // Reprodução do "BOTTOM OVERFLOWED BY 179 PIXELS" observado no aparelho:
+  // paisagem (360dp de altura) com o teclado ocupando 230dp.
+  group('Responsividade — formulário com teclado', () {
+    Future<void> abrirFormulario(WidgetTester tester) async {
+      await tester.tap(find.text('+ Nova'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('o formulário cabe em paisagem com o teclado aberto', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(800, 360));
+      await abrirFormulario(tester);
+      await abrirTeclado(tester);
+
+      // Era aqui que aparecia o "BOTTOM OVERFLOWED BY 179 PIXELS".
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Cancelar e Adicionar continuam alcançáveis com o teclado', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(800, 360));
+      await abrirFormulario(tester);
+      await abrirTeclado(tester);
+
+      // Podem exigir rolagem, mas precisam ser atingíveis.
+      await tester.ensureVisible(find.text('Adicionar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Adicionar'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      // Tocar em Cancelar fecha a folha: prova que o botão recebe toque.
+      expect(find.text('Nova consulta'), findsNothing);
+    });
+
+    testWidgets('todos os campos continuam acessíveis com o teclado', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(800, 360));
+      await abrirFormulario(tester);
+      await abrirTeclado(tester);
+
+      for (final campo in ['Título (ex: Pré-natal)', 'Médico(a) / Local']) {
+        await tester.ensureVisible(find.text(campo));
+        await tester.pumpAndSettle();
+        expect(find.text(campo), findsOneWidget, reason: campo);
+      }
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('em retrato sem teclado a folha não rola — visual preservado', (
+      tester,
+    ) async {
+      await montar(tester);
+      await abrirFormulario(tester);
+
+      final posicao = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byType(SingleChildScrollView),
+              matching: find.byType(Scrollable),
+            ).first,
+          )
+          .position;
+
+      // Nada a rolar: a folha continua do tamanho do conteúdo, como antes.
+      expect(posicao.maxScrollExtent, 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('em paisagem com teclado a folha realmente rola', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(800, 360));
+      await abrirFormulario(tester);
+      await abrirTeclado(tester);
+
+      final posicao = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byType(SingleChildScrollView),
+              matching: find.byType(Scrollable),
+            ).first,
+          )
+          .position;
+
+      // É a rolagem que substitui o estouro de 179px.
+      expect(posicao.maxScrollExtent, greaterThan(0));
+    });
+
+    testWidgets('o formulário continua cabendo em retrato com o teclado', (
+      tester,
+    ) async {
+      await montar(tester);
+      await abrirFormulario(tester);
+      await abrirTeclado(tester, altura: 300);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Adicionar'), findsOneWidget);
+    });
+
+    test('a folha usa rolagem em vez de Column solta', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Future<void> _abrirFormularioNovaConsulta(',
+      );
+
+      expect(corpo, contains('SingleChildScrollView('));
+      // Sem supressão de overflow em lugar nenhum da tela.
+      expect(fonteDaTela(), isNot(contains('FlutterError.onError')));
+    });
+
+    test('o Scaffold da Agenda não encolhe com o teclado', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Widget build(BuildContext context)',
+      );
+
+      expect(corpo, contains('resizeToAvoidBottomInset: false'));
+    });
+  });
+
+  group('Integridade — a correção não mexeu em regra de negócio', () {
+    test('a folha continua gravando por documento, sem batch', () {
+      final corpo = corpoDoMetodo(
+        fonteDaTela(),
+        'Future<void> _abrirFormularioNovaConsulta(',
+      );
+
+      expect(corpo, contains('ConsultasStorage.adicionar(novaConsulta)'));
+      expect(corpo, contains('_idPendente ??='));
+      expect(corpo, isNot(contains('batch')));
+      expect(corpo, isNot(contains('salvarConsultas')));
     });
   });
 }

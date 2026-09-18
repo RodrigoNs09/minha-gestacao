@@ -4,6 +4,7 @@ import '../data/sessao.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 import 'login_screen.dart';
 
 class ContaScreen extends StatefulWidget {
@@ -117,7 +118,7 @@ class _ContaScreenState extends State<ContaScreen> {
   Widget _cabecalho(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       decoration: BoxDecoration(
         color: AppColors.surfaceVariant(context),
         border: Border(
@@ -243,20 +244,8 @@ class _ContaScreenState extends State<ContaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: AppColors.borderStrong(context),
-              width: 0.5,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               _cabecalho(context),
               Expanded(
@@ -299,7 +288,6 @@ class _ContaScreenState extends State<ContaScreen> {
                 ),
               ),
             ],
-          ),
         ),
       ),
     );

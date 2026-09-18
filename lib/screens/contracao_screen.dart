@@ -5,6 +5,7 @@ import '../data/contracoes_data.dart';
 import '../services/contracoes_storage.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 class ContracaoScreen extends StatefulWidget {
   const ContracaoScreen({super.key});
@@ -253,72 +254,34 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
     );
   }
 
-  Widget navBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.navBar(context),
-        border: Border.all(color: AppColors.border(context), width: 0.5),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          Icon(
-            Icons.home_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.access_time_rounded,
-                color: AppTheme.primaryPurple,
-                size: 20,
-              ),
-              const SizedBox(height: 3),
-              const CircleAvatar(radius: 2, backgroundColor: Color(0xFF534AB7)),
-            ],
-          ),
-          Icon(
-            Icons.auto_graph_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-          Icon(
-            Icons.chat_bubble_outline_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: AppColors.borderStrong(context),
-              width: 0.5,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            child: Column(
+      // A SafeArea que havia aqui ficava DENTRO do cartão, depois do
+      // clipBehavior: não protegia das barras do sistema, só somava
+      // padding interno. Quem protege agora é a da MolduraResponsiva,
+      // por fora do cartão.
+      body: MolduraResponsiva(
+        child: Column(
               children: [
+                // O cabeçalho entrou na rolagem porque, fixo, não cabia em
+                // paisagem com o teclado aberto (86px de estouro). O
+                // ListView perdeu o padding lateral para o cabeçalho seguir
+                // colado nas bordas do cartão; o resto do corpo recebe esse
+                // recuo por dentro.
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    color: AppColors.surface(context),
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      children: [
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                  // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
+                  // padding vertical.
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Color(0xFF534AB7), Color(0xFF7F77DD)],
@@ -370,13 +333,13 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                     ],
                   ),
                 ),
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    color: AppColors.surface(context),
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-                      children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                  child: Column(
+                    // stretch reproduz a largura cheia que os itens já
+                    // tinham como filhos diretos do ListView.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
@@ -567,12 +530,12 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                       ],
                     ),
                   ),
+                    ],
+                  ),
                 ),
-                navBar(context),
+                ),
               ],
             ),
-          ),
-        ),
       ),
     );
   }

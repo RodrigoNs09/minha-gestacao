@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suacontracao_ai/screens/login_screen.dart';
+import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 
 void main() {
   String fonte() => File('lib/screens/login_screen.dart')
@@ -19,6 +20,42 @@ void main() {
     expect(fim, greaterThan(inicio), reason: assinatura);
 
     return codigo.substring(inicio, fim);
+  }
+
+  // Sem supressor de overflow e sem reduzir a escala de texto: o layout
+  // precisa caber de verdade. Qualquer RenderFlex que estoure aqui reprova
+  // o teste, que é o comportamento desejado.
+  Future<void> montar(
+    WidgetTester tester, {
+    Size tamanho = const Size(360, 800),
+    double escalaDeTexto = 1.0,
+  }) async {
+    tester.view.physicalSize = tamanho;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const LoginScreen(),
+        builder: (context, child) => MediaQuery.withClampedTextScaling(
+          minScaleFactor: escalaDeTexto,
+          maxScaleFactor: escalaDeTexto,
+          child: child!,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  // O teclado sobe depois da tela montada, que é a ordem real.
+  Future<void> abrirTeclado(
+    WidgetTester tester, {
+    double altura = 322,
+  }) async {
+    tester.view.viewInsets = FakeViewPadding(bottom: altura);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
   }
 
   group('LoginScreen — entrada da recuperação', () {
@@ -155,6 +192,207 @@ void main() {
       final corpo = corpoDoMetodo('Future<void> _abrirRecuperacao(');
 
       expect(corpo, contains('controller.dispose()'));
+    });
+  });
+
+  group('LoginScreen — responsividade', () {
+    // Os elementos que precisam sobreviver a qualquer cenário.
+    void esperarFormularioInteiro() {
+      expect(find.text('Minha Gestação'), findsOneWidget);
+      expect(find.text('Entre na sua conta'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'E-mail'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Senha'), findsOneWidget);
+      expect(find.text('Entrar'), findsOneWidget);
+      expect(find.text('Esqueci minha senha'), findsOneWidget);
+      expect(find.text('Não tem conta? Criar agora'), findsOneWidget);
+    }
+
+    testWidgets('1. retrato normal', (tester) async {
+      await montar(tester);
+
+      expect(tester.takeException(), isNull);
+      esperarFormularioInteiro();
+    });
+
+    testWidgets('2. tela pequena', (tester) async {
+      await montar(tester, tamanho: const Size(320, 640));
+
+      expect(tester.takeException(), isNull);
+      esperarFormularioInteiro();
+    });
+
+    testWidgets('3. paisagem', (tester) async {
+      await montar(tester, tamanho: const Size(800, 360));
+
+      expect(tester.takeException(), isNull);
+      // Em paisagem o formulário rola; tudo precisa ser alcançável.
+      await tester.ensureVisible(find.text('Não tem conta? Criar agora'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('4. teclado em retrato', (tester) async {
+      await montar(tester);
+      await abrirTeclado(tester);
+
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Entrar'), findsOneWidget);
+    });
+
+    testWidgets('5. teclado em paisagem', (tester) async {
+      await montar(tester, tamanho: const Size(800, 360));
+      await abrirTeclado(tester);
+
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Entrar'), findsOneWidget);
+    });
+
+    for (final escala in [1.3, 1.5]) {
+      testWidgets('${escala == 1.3 ? '6' : '7'}. font_scale $escala', (
+        tester,
+      ) async {
+        await montar(tester, escalaDeTexto: escala);
+
+        expect(tester.takeException(), isNull);
+        esperarFormularioInteiro();
+      });
+
+      testWidgets('font_scale $escala em tela pequena', (tester) async {
+        await montar(
+          tester,
+          tamanho: const Size(320, 640),
+          escalaDeTexto: escala,
+        );
+
+        expect(tester.takeException(), isNull);
+        esperarFormularioInteiro();
+      });
+    }
+
+    testWidgets('font_scale 2.0 em tela pequena — limite superior', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        tamanho: const Size(320, 640),
+        escalaDeTexto: 2.0,
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('fonte ampliada com o teclado aberto', (tester) async {
+      await montar(tester, escalaDeTexto: 1.5);
+      await abrirTeclado(tester);
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('o cartão usa a largura disponível numa tela estreita', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(360, 800));
+
+      final cartao = tester.getSize(
+        find.ancestor(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Container),
+        ).first,
+      );
+
+      // 360 da tela menos 24 de padding lateral.
+      expect(cartao.width, closeTo(336, 1));
+    });
+
+    testWidgets('o cartão não estica numa tela larga', (tester) async {
+      await montar(tester, tamanho: const Size(1200, 900));
+
+      final cartao = tester.getSize(
+        find.ancestor(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Container),
+        ).first,
+      );
+
+      expect(cartao.width, closeTo(400, 1));
+    });
+
+    testWidgets('a recuperação continua funcionando em tela pequena', (
+      tester,
+    ) async {
+      await montar(tester, tamanho: const Size(320, 640));
+
+      await tester.tap(find.text('Esqueci minha senha'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recuperar senha'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('LoginScreen — estrutura responsiva', () {
+    test('a moldura de tamanho fixo não existe mais', () {
+      final corpo = corpoDoMetodo('Widget build(BuildContext context)');
+
+      expect(corpo, isNot(contains('width: 360')));
+      expect(corpo, isNot(contains('minHeight: 620')));
+    });
+
+    test('a moldura vem do widget compartilhado, não é reimplementada', () {
+      final corpo = corpoDoMetodo('Widget build(BuildContext context)');
+
+      expect(corpo, contains('MolduraResponsiva('));
+      expect(corpo, isNot(contains('BoxConstraints(maxWidth:')));
+      expect(corpo, isNot(contains('BorderRadius.circular(36)')));
+    });
+
+    testWidgets('a tela usa mesmo o widget compartilhado', (tester) async {
+      await montar(tester);
+
+      // Não basta o código citar o nome: o widget precisa estar na árvore.
+      expect(find.byType(MolduraResponsiva), findsOneWidget);
+    });
+
+    test('o SingleChildScrollView original foi preservado', () {
+      final corpo = corpoDoMetodo('Widget build(BuildContext context)');
+
+      expect(corpo, contains('SingleChildScrollView('));
+      expect(corpo, contains('padding: const EdgeInsets.all(28)'));
+    });
+
+    test('o Scaffold continua encolhendo com o teclado', () {
+      // Ao contrário da Agenda, aqui os campos estão na própria tela:
+      // encolher é o que permite ao scroll trazê-los para cima do teclado.
+      final corpo = corpoDoMetodo('Widget build(BuildContext context)');
+
+      expect(corpo, isNot(contains('resizeToAvoidBottomInset: false')));
+    });
+
+    test('nenhum supressor de overflow na tela nem no teste', () {
+      // As agulhas são montadas por concatenação: como literais inteiros,
+      // elas casariam com esta própria asserção.
+      final agulhas = ['ignorarOverflow' 'DeLayout', 'FlutterError.' 'onError'];
+
+      final esteTeste = File(
+        'test/screens/login_recuperacao_test.dart',
+      ).readAsStringSync();
+
+      for (final agulha in agulhas) {
+        expect(fonte(), isNot(contains(agulha)), reason: 'tela: $agulha');
+        expect(esteTeste, isNot(contains(agulha)), reason: 'teste: $agulha');
+      }
+    });
+
+    test('a lógica de autenticação não foi tocada', () {
+      final corpo = corpoDoMetodo('Future<void> _fazerLogin(');
+
+      expect(corpo, contains('AuthService.login(email: email, senha: senha)'));
+      expect(corpo, contains('GestacaoStorage.restaurarDUM()'));
+      expect(corpo, contains('pushAndRemoveUntil'));
     });
   });
 }

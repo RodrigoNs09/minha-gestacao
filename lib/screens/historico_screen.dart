@@ -3,6 +3,7 @@ import '../models/contracao.dart';
 import '../services/contracoes_storage.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 /// Data do registro, ou nulo quando o campo não descreve um dia real.
 DateTime? dataDoRegistro(String data) {
@@ -248,49 +249,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }
   }
 
-  Widget navBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.navBar(context),
-        border: Border.all(color: AppColors.border(context), width: 0.5),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          Icon(
-            Icons.home_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-          Icon(
-            Icons.access_time_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_graph_rounded,
-                color: AppTheme.primaryPurple,
-                size: 20,
-              ),
-              const SizedBox(height: 3),
-              const CircleAvatar(radius: 2, backgroundColor: Color(0xFF534AB7)),
-            ],
-          ),
-          Icon(
-            Icons.chat_bubble_outline_rounded,
-            color: AppColors.textSecondary(context),
-            size: 20,
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<bool> _confirmarExclusao(Contracao c) async {
     final resposta = await showDialog<bool>(
       context: context,
@@ -534,24 +492,15 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: AppColors.borderStrong(context),
-              width: 0.5,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
+                // padding vertical, e a soma devolve a posição original
+                // do título — medida, não deduzida.
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
                   border: Border(
@@ -603,7 +552,11 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Row(
+                    // Wrap em vez de Row: as três chips não cabiam lado a
+                    // lado com fonte ampliada (65px de estouro). Truncar
+                    // "Semana" seria pior do que deixar quebrar a linha.
+                    Wrap(
+                      runSpacing: 8,
                       children: ['Hoje', 'Semana', 'Mês'].map((f) {
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
@@ -727,17 +680,18 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                         ],
                       ),
               ),
-              navBar(context),
             ],
           ),
         ),
-      ),
     );
   }
 
   Widget _painelDeErro(BuildContext context) {
     return Center(
-      child: Padding(
+      // Rolagem: em paisagem o painel não cabia na altura que sobra
+      // (264px de estouro com fonte ampliada).
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -785,6 +739,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

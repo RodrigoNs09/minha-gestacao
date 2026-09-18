@@ -8,7 +8,6 @@ import 'screens/conta_screen.dart';
 import 'screens/contracao_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/historico_screen.dart';
-import 'screens/assistente_screen.dart';
 import 'screens/chutes_screen.dart';
 import 'screens/historico_chutes_screen.dart';
 import 'screens/sintomas_screen.dart';
@@ -20,6 +19,7 @@ import 'services/contracoes_storage.dart';
 import 'services/firestore_error.dart';
 import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
+import 'widgets/moldura_responsiva.dart';
 import 'widgets/editar_dum_dialog.dart';
 import 'screens/onboarding_screen.dart';
 
@@ -373,13 +373,24 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Registrar Contração', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
-                SizedBox(height: 2),
-                Text('Toque para iniciar o monitoramento', style: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.65), fontSize: 11)),
-              ],
+            // Sem o Expanded os dois textos pediam a largura natural e
+            // estouravam à direita assim que o cartão deixou de ter 360dp
+            // fixos — 176px numa tela de 360dp, e mais com fonte ampliada.
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Registrar Contração',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+                  SizedBox(height: 2),
+                  Text('Toque para iniciar o monitoramento',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.65), fontSize: 11)),
+                ],
+              ),
             ),
           ],
         ),
@@ -575,21 +586,24 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, _, _) {
         return Scaffold(
           backgroundColor: AppColors.scaffold(context),
-          body: Center(
-            child: Container(
-              width: 360,
-              constraints: const BoxConstraints(minHeight: 760),
-              decoration: BoxDecoration(
-                color: AppColors.surface(context),
-                borderRadius: BorderRadius.circular(36),
-                border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
+          body: MolduraResponsiva(
+            child: Column(
                 children: [
+                  // O cabeçalho entrou na rolagem: fixo, ele mais o bottomNav
+                  // não cabiam quando a altura apertava (149px de estouro em
+                  // paisagem com fonte 1.5). O ListView perdeu o padding
+                  // lateral para o cabeçalho continuar colado nas bordas do
+                  // cartão; o resto do corpo recebe esse recuo por dentro.
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      children: [
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(24, 48, 24, 28),
+                    // O topo era 48 para compensar a barra de status à mão.
+                    // A SafeArea da MolduraResponsiva faz isso de forma
+                    // adaptativa, então aqui fica o mesmo 28 do rodapé.
+                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 28),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant(context),
                       border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
@@ -598,15 +612,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Row(
                           children: [
-                            Row(
-                              children: [
-                                CircleAvatar(radius: 5, backgroundColor: AppTheme.pink),
-                                const SizedBox(width: 8),
-                                Text('Minha Gestação',
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.accentText(context))),
-                              ],
+                            // Expanded no lugar do par Row+Spacer: com o
+                            // cartão acompanhando a largura da tela, em
+                            // 360dp sobravam 287 para um conteúdo de 318 e
+                            // o cabeçalho estourava 31px. O Expanded já
+                            // empurra os botões para a direita, então o
+                            // Spacer sairia sobrando e brigaria pelo espaço.
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  CircleAvatar(radius: 5, backgroundColor: AppTheme.pink),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text('Minha Gestação',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.accentText(context))),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const Spacer(),
                             GestureDetector(
                               onTap: () {
                                 Navigator.push(
@@ -692,9 +717,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(18, 20, 18, 100),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+                    child: Column(
+                      // stretch reproduz a largura cheia que os itens já
+                      // tinham como filhos diretos do ListView.
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -740,22 +768,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           iconBg: AppColors.statGreen(context),
                           iconColor: const Color(0xFF1D9E75),
                         ),
-                        menuCard(
-                          context: context,
-                          icon: Icons.chat_bubble_outline_rounded,
-                          title: 'Assistente de Dúvidas',
-                          subtitle: 'Tire dúvidas com apoio de IA',
-                          screen: const AssistenteScreen(),
-                          iconBg: AppColors.statOrange(context),
-                          iconColor: const Color(0xFF854F0B),
-                        ),
                       ],
                     ),
                   ),
+                    ],
+                  ),
+                ),
                   bottomNav(context),
                 ],
               ),
-            ),
           ),
         );
       },

@@ -284,19 +284,27 @@ Future<void> mostrarEditarDUM(
           }
 
           return Container(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
             decoration: BoxDecoration(
               color: AppColors.surface(ctx),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(24),
               ),
             ),
-            child: Column(
+            // O padding vive dentro do scroll para que o recuo do teclado
+            // seja área rolável — mesmo arranjo já validado na folha da
+            // Agenda. Sem ele a folha estourava em paisagem e com fonte
+            // ampliada. O padding.bottom cobre a barra de gestos, que a
+            // folha não alcançava por não ter SafeArea.
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom +
+                    MediaQuery.of(ctx).padding.bottom +
+                    24,
+              ),
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -409,6 +417,7 @@ Future<void> mostrarEditarDUM(
                   ],
                 ),
               ],
+            ),
             ),
           );
         },

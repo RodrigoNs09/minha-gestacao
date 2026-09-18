@@ -4,6 +4,7 @@ import '../models/consulta.dart';
 import '../services/consultas_storage.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 List<Consulta> ordenadasPorData(
   List<Consulta> consultas, {
@@ -219,17 +220,22 @@ class _AgendaScreenState extends State<AgendaScreen> {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             return Container(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
               decoration: BoxDecoration(
                 color: AppColors.surface(ctx),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              child: Column(
+              // O padding vive dentro do scroll para que o recuo do teclado
+              // seja área rolável: em paisagem sobravam 130dp e os botões
+              // ficavam inalcançáveis (estouro de 179px no Motorola G10).
+              // Sem teclado o conteúdo cabe inteiro e nada rola.
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 20,
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                ),
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -286,9 +292,15 @@ class _AgendaScreenState extends State<AgendaScreen> {
                               children: [
                                 Icon(Icons.calendar_today_rounded, size: 16, color: AppTheme.primaryPurple),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '${dataEscolhida.day.toString().padLeft(2, '0')}/${dataEscolhida.month.toString().padLeft(2, '0')}/${dataEscolhida.year}',
-                                  style: TextStyle(fontSize: 13, color: AppColors.textPrimary(ctx)),
+                                // Flexible: a data completa não cabe em meia
+                                // largura quando a fonte cresce.
+                                Flexible(
+                                  child: Text(
+                                    '${dataEscolhida.day.toString().padLeft(2, '0')}/${dataEscolhida.month.toString().padLeft(2, '0')}/${dataEscolhida.year}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 13, color: AppColors.textPrimary(ctx)),
+                                  ),
                                 ),
                               ],
                             ),
@@ -312,9 +324,14 @@ class _AgendaScreenState extends State<AgendaScreen> {
                               children: [
                                 Icon(Icons.access_time_rounded, size: 16, color: AppTheme.primaryPurple),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '${horaEscolhida.hour.toString().padLeft(2, '0')}:${horaEscolhida.minute.toString().padLeft(2, '0')}',
-                                  style: TextStyle(fontSize: 13, color: AppColors.textPrimary(ctx)),
+                                // Mesma razão do campo de data ao lado.
+                                Flexible(
+                                  child: Text(
+                                    '${horaEscolhida.hour.toString().padLeft(2, '0')}:${horaEscolhida.minute.toString().padLeft(2, '0')}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 13, color: AppColors.textPrimary(ctx)),
+                                  ),
                                 ),
                               ],
                             ),
@@ -401,6 +418,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     ],
                   ),
                 ],
+                ),
               ),
             );
           },
@@ -447,14 +465,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
           opacity: passada ? 0.55 : 1.0,
           child: Row(
             children: [
+              // minHeight no lugar de height: com fonte ampliada as três
+              // linhas passavam de 52 e o mês vazava do badge. Agora a caixa
+              // cresce; em escala normal continua exatamente 44x52.
               Container(
-                width: 44,
-                height: 52,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 52),
                 decoration: BoxDecoration(
                   color: passada ? AppColors.statPurple(context).withOpacity(0.5) : AppColors.statPurple(context),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: dataHora == null
 
@@ -534,17 +555,12 @@ class _AgendaScreenState extends State<AgendaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      // A Agenda não tem campo de texto próprio: os dois vivem na folha
+      // modal, que já trata o viewInsets. Sem isto o Scaffold encolhia para
+      // 113dp em paisagem com o teclado e o cartão estourava por trás.
+      resizeToAvoidBottomInset: false,
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               Container(
                 width: double.infinity,
@@ -569,18 +585,27 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     ),
                     const SizedBox(height: 14),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Agenda',
-                                style: TextStyle(color: AppColors.textPrimary(context), fontSize: 20, fontWeight: FontWeight.w500)),
-                            const SizedBox(height: 3),
-                            Text('Consultas e exames',
-                                style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
-                          ],
+                        // Expanded + ellipsis: sem isso o título empurrava o
+                        // "+ Nova" para fora do recorte do cartão, e o botão
+                        // deixava de receber toque com a fonte ampliada.
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Agenda',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: AppColors.textPrimary(context), fontSize: 20, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 3),
+                              Text('Consultas e exames',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 12),
                         GestureDetector(
                           onTap: _abrirFormularioNovaConsulta,
                           child: Container(
@@ -628,7 +653,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 ),
               ),
             ],
-          ),
         ),
       ),
     );

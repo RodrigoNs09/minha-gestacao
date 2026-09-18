@@ -3,6 +3,7 @@ import '../models/chute_sessao.dart';
 import '../services/chutes_storage.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 Duration? duracaoDaSessao(ChuteSessao sessao) {
   final inicio = _minutosDoDia(sessao.horaInicio);
@@ -172,21 +173,15 @@ class _HistoricoChutesScreenState extends State<HistoricoChutesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
+                // padding vertical, e a soma devolve a posição original
+                // do título — medida, não deduzida.
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
                   border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
@@ -252,7 +247,6 @@ class _HistoricoChutesScreenState extends State<HistoricoChutesScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 }

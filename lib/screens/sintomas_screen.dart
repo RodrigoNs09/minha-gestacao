@@ -4,6 +4,7 @@ import '../models/registro_sintomas.dart';
 import '../services/firestore_error.dart';
 import '../services/sintomas_storage.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 List<RegistroSintomas> comRegistroDoDia(
   List<RegistroSintomas> historico,
@@ -194,21 +195,15 @@ class _SintomasScreenState extends State<SintomasScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
+                // padding vertical, e a soma devolve a posição original
+                // do título — medida, não deduzida.
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
                   border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
@@ -254,8 +249,13 @@ class _SintomasScreenState extends State<SintomasScreen> {
                           Text('COMO VOCÊ ESTÁ HOJE?',
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: AppColors.textSecondary(context))),
                           const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          // Wrap em vez de Row: os cinco rostos não cabiam
+                          // lado a lado (3,1px já em fonte normal, 218px em
+                          // 1.5). Emoji não trunca, então quebrar a linha é
+                          // a única saída que preserva as cinco opções.
+                          Wrap(
+                            alignment: WrapAlignment.spaceAround,
+                            runSpacing: 8,
                             children: List.generate(5, (i) {
                               final selecionado = _humorSelecionado == i;
                               return GestureDetector(
@@ -314,7 +314,16 @@ class _SintomasScreenState extends State<SintomasScreen> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(opcao.label, style: TextStyle(fontSize: 13, color: AppColors.textPrimary(context))),
+                                    // Expanded: o rótulo pedia a largura
+                                    // natural e empurrava a caixinha de
+                                    // marcação para fora com fonte grande.
+                                    Expanded(
+                                      child: Text(opcao.label,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(fontSize: 13, color: AppColors.textPrimary(context))),
+                                    ),
+                                    const SizedBox(width: 8),
                                     Container(
                                       width: 20,
                                       height: 20,
@@ -486,7 +495,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 }

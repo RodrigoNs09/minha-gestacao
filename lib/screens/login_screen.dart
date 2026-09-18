@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/gestacao_storage.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';
 import 'register_screen.dart';
@@ -186,17 +187,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 360,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(color: AppColors.borderStrong(context), width: 0.5),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Center(
+      // O Scaffold continua encolhendo com o teclado de propósito: é isso que
+      // deixa o SingleChildScrollView trazer os campos para cima dele.
+      body: MolduraResponsiva(
+        child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(28),
               child: Column(
@@ -320,7 +314,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }

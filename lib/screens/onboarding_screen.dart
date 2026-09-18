@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/firestore_error.dart';
 import '../services/gestacao_storage.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 import '../main.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -289,19 +290,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 360,
-          constraints: const BoxConstraints(minHeight: 760),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: AppColors.borderStrong(context),
-              width: 0.5,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
+      // Center como na Register: sem ele o SingleChildScrollView se
+      // dimensiona pelo conteúdo e o cartão encolhe, virando o único
+      // flutuante do app — a passagem Onboarding → Home mostraria o
+      // cartão crescendo. Com Center o cartão preenche a altura.
+      body: MolduraResponsiva(
+        child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: Column(

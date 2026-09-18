@@ -8,6 +8,7 @@ import '../services/firestore_error.dart';
 import '../services/vacinas_engine.dart';
 import '../services/vacinas_storage.dart';
 import '../theme/app_theme.dart';
+import '../widgets/moldura_responsiva.dart';
 
 const String mensagemSemGestacaoConfigurada =
     'Informe a data da sua gestação para ver o calendário de vacinas.';
@@ -946,7 +947,10 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
   Widget _painelDeErro(BuildContext context, String mensagem) {
     return Center(
-      child: Padding(
+      // Rolagem: em paisagem e com fonte ampliada o painel não cabia na
+      // altura que sobra.
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1007,6 +1011,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1099,7 +1104,10 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
   Widget _painelSemGestacao(BuildContext context) {
     return Center(
-      child: Padding(
+      // Rolagem: em paisagem e com fonte ampliada o painel não cabia na
+      // altura que sobra.
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1121,6 +1129,7 @@ class _VacinasScreenState extends State<VacinasScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1161,24 +1170,15 @@ class _VacinasScreenState extends State<VacinasScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(minHeight: 620),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: AppColors.borderStrong(context),
-              width: 0.5,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
+      body: MolduraResponsiva(
+        child: Column(
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
+                // padding vertical, e a soma devolve a posição original
+                // do título — medida, não deduzida.
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
                   border: Border(
@@ -1234,7 +1234,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
               ),
               Expanded(child: _conteudo(context)),
             ],
-          ),
         ),
       ),
     );
