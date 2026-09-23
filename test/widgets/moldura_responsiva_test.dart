@@ -8,11 +8,7 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Sem supressor de overflow e sem clamp de fonte para baixo: se o layout
-  // estourar, o teste reprova. É esse o objetivo.
 
-  /// Conteúdo de teste que se comporta como o de uma tela real: um cabeçalho
-  /// de largura cheia mais um corpo rolável.
   Widget conteudo({int itens = 3}) => Column(
     children: [
       Container(
@@ -35,7 +31,6 @@ void main() {
     body: MolduraResponsiva(maxWidth: maxWidth, child: filho),
   );
 
-  /// O `Container` decorado da moldura — o cartão em si.
   Size cartao(WidgetTester tester) => tester.getSize(
     find
         .descendant(
@@ -60,7 +55,6 @@ void main() {
     });
 
     testWidgets('em 411 dp o cartão fica em 387,43 dp', (tester) async {
-      // Número conferido no framebuffer do Motorola G10.
       await montar(tester, telaCom(conteudo()), tamanho: Telas.g10);
 
       expect(cartao(tester).width, closeTo(387.43, 1));
@@ -115,7 +109,6 @@ void main() {
     });
 
     testWidgets('não estoura numa altura muito pequena', (tester) async {
-      // O caso que a moldura antiga quebrava: minHeight 620 em 200 dp.
       await montar(tester, telaCom(conteudo()), tamanho: const Size(360, 200));
 
       expect(tester.takeException(), isNull);
@@ -145,7 +138,6 @@ void main() {
       final alta = cartao(tester).height;
 
       expect(alta, greaterThan(baixa));
-      // Sem minHeight: nunca ultrapassa o que há, descontado o padding.
       expect(alta, lessThanOrEqualTo(1280 - 16));
     });
 
@@ -174,7 +166,6 @@ void main() {
       });
 
       testWidgets('a largura não muda com fonte $escala', (tester) async {
-        // A moldura responde às constraints, nunca ao tamanho da fonte.
         await montar(
           tester,
           telaCom(conteudo()),
@@ -193,9 +184,6 @@ void main() {
     ) async {
       await montar(tester, telaCom(conteudo()), tamanho: Telas.comum);
 
-      // Widgets de rolagem trazem SafeArea próprias, então não basta contar:
-      // o que importa é que a primeira da árvore seja a nossa, envolvendo
-      // tudo. As demais estão abaixo dela.
       final externa = find
           .descendant(
             of: find.byType(MolduraResponsiva),
@@ -233,7 +221,6 @@ void main() {
             .first,
       );
 
-      // 48 da barra de status + 8 do padding vertical.
       expect(caixa.top, greaterThanOrEqualTo(48));
       expect(caixa.bottom, lessThanOrEqualTo(640 - 32));
       expect(tester.takeException(), isNull);

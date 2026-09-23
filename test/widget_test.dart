@@ -27,7 +27,7 @@ void main() {
         await tester.pumpWidget(const MinhaGestacaoApp());
         expect(find.byType(MaterialApp), findsOneWidget);
       },
-      skip: true, 
+      skip: true,
     );
   });
 
@@ -109,7 +109,7 @@ void main() {
       final textoClaro = AppColors.textPrimary(ctxClaro);
 
       await tester.pumpWidget(appComModo(ThemeMode.dark));
-      
+
       await tester.pumpAndSettle();
 
       final ctxEscuro = tester.element(find.byKey(sonda));

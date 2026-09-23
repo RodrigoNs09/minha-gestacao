@@ -16,6 +16,9 @@ class ChutesStorage {
         .collection('chutes');
   }
 
+  static CollectionReference<Map<String, dynamic>>? get colecaoDoUsuario =>
+      _colecao;
+
   static DocumentReference<Map<String, dynamic>>? get _documentoConfig {
     final uid = _uid;
     if (uid == null) return null;

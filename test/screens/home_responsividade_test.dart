@@ -11,11 +11,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da Home. Sem supressor de overflow e sem clamp de fonte
-  // para baixo: um RenderFlex estourado reprova o teste.
-  //
-  // Os testes de comportamento da Home seguem em home_vacinas_test,
-  // home_conta_test e home_gestacao_test. Este arquivo cobre só layout.
 
   late GestacaoInfo gestacaoOriginal;
 
@@ -42,11 +37,6 @@ void main() {
     escalaDeTexto: escalaDeTexto,
   );
 
-  /// O que está sempre montado, em qualquer tela e escala.
-  ///
-  /// O corpo é um ListView, que constrói sob demanda: itens abaixo da
-  /// dobra não existem na árvore até alguém rolar. Por isso aqui só entra
-  /// o cabeçalho; o resto é verificado rolando, no grupo de rolagem.
   void esperarCabecalho() {
     expect(find.text('Minha Gestação'), findsOneWidget);
     expect(find.text('Olá, mamãe 👋'), findsOneWidget);
@@ -72,9 +62,6 @@ void main() {
     testWidgets('a barra inferior continua com as quatro abas', (tester) async {
       await abrir(tester);
 
-      // Presença, não contagem: com o corpo num único filho do ListView
-      // tudo é construído de uma vez, e o ícone de caminhada também
-      // aparece no card "Histórico de Chutes".
       for (final icone in [
         Icons.home_rounded,
         Icons.directions_walk_rounded,
@@ -91,8 +78,6 @@ void main() {
       final nav = tester.getRect(find.byIcon(Icons.home_rounded));
       final rolagem = tester.getRect(find.byType(Scrollable).first);
 
-      // O que prova que o bottomNav não entrou na rolagem junto com o
-      // cabeçalho: ele fica abaixo do fim da viewport do ListView.
       expect(nav.top, greaterThanOrEqualTo(rolagem.bottom - 1));
     });
   });
@@ -101,10 +86,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 57,0 dp era a posição antes do retrofit, com a moldura fixa e o
-      // topo do cabeçalho em 48. Depois de entrar a MolduraResponsiva
-      // (padding 8) e o cabeçalho ir para dentro do ListView, o topo de 40
-      // devolve exatamente os mesmos 57,0 — medido, não estimado.
       expect(tester.getRect(find.text('Minha Gestação')).top, closeTo(57, 3));
     });
   });
@@ -214,10 +195,6 @@ void main() {
     testWidgets('em 600x960 o corpo ainda rola um pouco', (tester) async {
       await abrir(tester, tamanho: Telas.tabletPequeno);
 
-      // 136,5 dp — medido. Com o cabeçalho dentro da rolagem, 960 dp de
-      // altura deixaram de comportar o corpo inteiro; antes do retrofit o
-      // cabeçalho ficava fora e só o corpo disputava o espaço. Rolar aqui
-      // é o comportamento correto, não um defeito a espremer.
       expect(posicaoDoCorpo(tester).maxScrollExtent, closeTo(136.5, 2));
     });
 
@@ -238,9 +215,6 @@ void main() {
     testWidgets('ocupa a largura inteira do cartão', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // A faixa do cabeçalho é o Container com surfaceVariant logo abaixo
-      // do ListView; comparar com o cartão prova que o padding lateral de
-      // 18 não vazou para ele quando entrou na rolagem.
       final faixa = tester.getRect(
         find
             .ancestor(
@@ -282,7 +256,6 @@ void main() {
             .first,
       );
 
-      // Sem os 20 dp de topo que o ListView tinha antes.
       expect(faixa.top, closeTo(moldura.top, 1));
     });
   });
@@ -306,7 +279,6 @@ void main() {
     });
 
     test('o Scaffold da Home continua encolhendo com o teclado', () {
-      // A Home não tem formulário: nada a desativar.
       final codigo = fonteDoMain();
 
       expect(codigo, isNot(contains('resizeToAvoidBottomInset')));
@@ -332,8 +304,6 @@ void main() {
     });
 
     test('nenhum supressor de overflow neste arquivo de teste', () {
-      // Agulhas por concatenação: como literais inteiros, casariam com esta
-      // própria asserção.
       final agulhas = ['ignorarOverflow' 'DeLayout', 'FlutterError.' 'onError'];
 
       final esteTeste = File(

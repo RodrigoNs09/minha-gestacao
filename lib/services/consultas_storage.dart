@@ -14,6 +14,9 @@ class ConsultasStorage {
         .collection('consultas');
   }
 
+  static CollectionReference<Map<String, dynamic>>? get colecaoDoUsuario =>
+      _colecao;
+
   static bool idEhEnderecavel(String id) => id.isNotEmpty && !id.contains('/');
 
   static DocumentReference<Map<String, dynamic>>? _documento(String id) {
@@ -42,7 +45,6 @@ class ConsultasStorage {
     return true;
   }
 
-  /// Remove só o documento daquela consulta.
   static Future<bool> remover(String id) async {
     final doc = _documento(id);
     if (doc == null) return false;

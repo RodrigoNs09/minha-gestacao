@@ -224,10 +224,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 color: AppColors.surface(ctx),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              // O padding vive dentro do scroll para que o recuo do teclado
-              // seja área rolável: em paisagem sobravam 130dp e os botões
-              // ficavam inalcançáveis (estouro de 179px no Motorola G10).
-              // Sem teclado o conteúdo cabe inteiro e nada rola.
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(
                   left: 20,
@@ -292,8 +288,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                               children: [
                                 Icon(Icons.calendar_today_rounded, size: 16, color: AppTheme.primaryPurple),
                                 const SizedBox(width: 8),
-                                // Flexible: a data completa não cabe em meia
-                                // largura quando a fonte cresce.
                                 Flexible(
                                   child: Text(
                                     '${dataEscolhida.day.toString().padLeft(2, '0')}/${dataEscolhida.month.toString().padLeft(2, '0')}/${dataEscolhida.year}',
@@ -324,7 +318,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                               children: [
                                 Icon(Icons.access_time_rounded, size: 16, color: AppTheme.primaryPurple),
                                 const SizedBox(width: 8),
-                                // Mesma razão do campo de data ao lado.
                                 Flexible(
                                   child: Text(
                                     '${horaEscolhida.hour.toString().padLeft(2, '0')}:${horaEscolhida.minute.toString().padLeft(2, '0')}',
@@ -465,9 +458,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
           opacity: passada ? 0.55 : 1.0,
           child: Row(
             children: [
-              // minHeight no lugar de height: com fonte ampliada as três
-              // linhas passavam de 52 e o mês vazava do badge. Agora a caixa
-              // cresce; em escala normal continua exatamente 44x52.
               Container(
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 52),
                 decoration: BoxDecoration(
@@ -555,9 +545,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      // A Agenda não tem campo de texto próprio: os dois vivem na folha
-      // modal, que já trata o viewInsets. Sem isto o Scaffold encolhia para
-      // 113dp em paisagem com o teclado e o cartão estourava por trás.
       resizeToAvoidBottomInset: false,
       body: MolduraResponsiva(
         child: Column(
@@ -586,9 +573,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     const SizedBox(height: 14),
                     Row(
                       children: [
-                        // Expanded + ellipsis: sem isso o título empurrava o
-                        // "+ Nova" para fora do recorte do cartão, e o botão
-                        // deixava de receber toque com a fonte ampliada.
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

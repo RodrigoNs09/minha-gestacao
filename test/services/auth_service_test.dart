@@ -8,8 +8,6 @@ void main() {
       .where((linha) => !linha.trimLeft().startsWith('//'))
       .join('\n');
 
-  // Corpo de um método, da assinatura até a chave de fecho na indentação de
-  // método. Serve para checar invariantes que valem só dentro de um deles.
   String corpoDoMetodo(String assinatura) {
     final codigo = fonte();
     final inicio = codigo.indexOf(assinatura);

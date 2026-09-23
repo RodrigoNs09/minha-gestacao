@@ -7,12 +7,8 @@ import 'package:suacontracao_ai/models/gestacao_info.dart';
 import 'package:suacontracao_ai/widgets/editar_dum_dialog.dart';
 
 void main() {
-  // A regra de edição é pura e recebe "hoje" injetado: nenhum teste aqui
-  // depende do relógio da máquina.
   group('Editar DUM — confirmar sem alteração', () {
     test('1. preserva exatamente a DUM atual, em qualquer resto de semana', () {
-      // O resto da divisão por 7 é o que o cálculo antigo perdia: o diálogo
-      // pré-preenche o piso das semanas.
       final hoje = DateTime(2026, 8, 1);
       const semanas = 20;
 
@@ -29,7 +25,6 @@ void main() {
         expect(resultado, dumAtual, reason: 'resto de $resto dias');
 
         if (resto > 0) {
-          // O que o cálculo antigo teria devolvido: a DUM adiantada.
           expect(
             resultado,
             isNot(hoje.subtract(const Duration(days: semanas * 7))),
@@ -40,7 +35,6 @@ void main() {
     });
 
     test('1b. a DUM não se desloca por confirmações sucessivas', () {
-      // Abrir e confirmar várias vezes tem de ser idempotente.
       final hoje = DateTime(2026, 5, 27);
       final original = DateTime(2026, 1, 5);
       var dum = original;
@@ -59,8 +53,6 @@ void main() {
     });
 
     test('1c. o dia é preservado mesmo com resto de 6 dias', () {
-      // 20 semanas e 6 dias: o cálculo antigo devolveria hoje - 140 dias,
-      // adiantando a DUM em 6 dias.
       final dumAtual = DateTime(2026, 1, 5);
       final hoje = DateTime(2026, 5, 31);
 
@@ -89,7 +81,6 @@ void main() {
         hoje: DateTime(2026, 5, 25, 0, 1),
       );
 
-      // Mesmo dia civil, sem resto de hora.
       expect(resultado, DateTime(2026, 1, 5));
       expect(resultado.hour, 0);
       expect(resultado.minute, 0);
@@ -114,7 +105,6 @@ void main() {
     test('2c. a DPP também produz data civil', () {
       final resultado = dumAoConfirmarDpp(DateTime(2026, 10, 12, 18, 20));
 
-      // 12/10/2026 menos 280 dias.
       expect(resultado, DateTime(2026, 1, 5));
       expect(resultado.hour, 0);
     });
@@ -161,7 +151,6 @@ void main() {
     });
 
     test('3c. voltar ao valor inicial preserva, não recalcula', () {
-      // Subir e descer o contador até o valor original não pode mover a DUM.
       final dumAtual = DateTime(2026, 1, 5);
 
       expect(
@@ -178,8 +167,6 @@ void main() {
 
   group('Editar DUM — o cálculo é puro', () {
     test('nenhuma das duas funções lê o relógio', () {
-      // Duas chamadas com o mesmo "hoje" injetado dão o mesmo resultado,
-      // e "hoje" é sempre parâmetro.
       final a = dumAoConfirmarSemanas(
         semanasInformadas: 22,
         semanasIniciais: 20,

@@ -14,6 +14,9 @@ class ContracoesStorage {
         .collection('contracoes');
   }
 
+  static CollectionReference<Map<String, dynamic>>? get colecaoDoUsuario =>
+      _colecao;
+
   static bool idEhEnderecavel(String id) => id.isNotEmpty && !id.contains('/');
 
   static DocumentReference<Map<String, dynamic>>? _documento(String id) {
@@ -25,7 +28,7 @@ class ContracoesStorage {
 
   static Future<Contracao?> adicionar(Contracao nova) async {
     final colecao = _colecao;
-    if (colecao == null) return null; // usuário não logado
+    if (colecao == null) return null;
 
     final idRecebido = nova.id ?? '';
     final id = idEhEnderecavel(idRecebido) ? idRecebido : colecao.doc().id;
@@ -42,7 +45,6 @@ class ContracoesStorage {
     return true;
   }
 
-  /// Remove só o documento daquela contração.
   static Future<bool> remover(String id) async {
     final doc = _documento(id);
     if (doc == null) return false;

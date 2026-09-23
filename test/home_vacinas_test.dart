@@ -61,7 +61,7 @@ void main() {
 
       expect(find.text('Histórico de Contrações'), findsOneWidget);
       expect(find.text('Histórico de Chutes'), findsOneWidget);
-      expect(find.text('Assistente de Dúvidas'), findsOneWidget);
+      expect(find.text('Assistente de Dúvidas'), findsNothing);
     });
   });
 

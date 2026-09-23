@@ -73,8 +73,6 @@ void main() {
     addTearDown(() => FlutterError.onError = anterior);
   }
 
-  // O pulso do contador é uma animação infinita: pumpAndSettle nunca
-  // assentaria. Dois pumps bastam para o initState e os Futures da leitura.
   Future<void> assentar(WidgetTester tester) async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -130,7 +128,6 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(const MaterialApp(home: ChutesScreen()));
-      // Desmonta antes de a leitura terminar.
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await assentar(tester);
 
@@ -145,9 +142,6 @@ void main() {
       expect(find.text('0'), findsOneWidget);
     });
 
-    // Sem Firebase a gravação falha no mesmo turno síncrono do toque, então
-    // o "1" intermediário não chega a ser pintado. O que dá para garantir
-    // aqui é que o incremento é de exatamente um, e uma só vez.
     test('um toque incrementa exatamente uma vez', () {
       final corpo = corpoDoMetodo(
         fonteDaTela(),

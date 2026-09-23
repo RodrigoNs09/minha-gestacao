@@ -290,11 +290,6 @@ Future<void> mostrarEditarDUM(
                 top: Radius.circular(24),
               ),
             ),
-            // O padding vive dentro do scroll para que o recuo do teclado
-            // seja área rolável — mesmo arranjo já validado na folha da
-            // Agenda. Sem ele a folha estourava em paisagem e com fonte
-            // ampliada. O padding.bottom cobre a barra de gestos, que a
-            // folha não alcançava por não ter SafeArea.
             child: SingleChildScrollView(
               padding: EdgeInsets.only(
                 left: 20,

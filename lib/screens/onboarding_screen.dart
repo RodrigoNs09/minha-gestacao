@@ -290,10 +290,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      // Center como na Register: sem ele o SingleChildScrollView se
-      // dimensiona pelo conteúdo e o cartão encolhe, virando o único
-      // flutuante do app — a passagem Onboarding → Home mostraria o
-      // cartão crescendo. Com Center o cartão preenche a altura.
       body: MolduraResponsiva(
         child: Center(
           child: SingleChildScrollView(

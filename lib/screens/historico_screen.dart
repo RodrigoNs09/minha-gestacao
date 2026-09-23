@@ -5,7 +5,6 @@ import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 import '../widgets/moldura_responsiva.dart';
 
-/// Data do registro, ou nulo quando o campo não descreve um dia real.
 DateTime? dataDoRegistro(String data) {
   final partes = data.split('-');
   if (partes.length != 3) return null;
@@ -134,7 +133,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }
 
     final entradas = grupos.entries.toList()
-      ..sort((a, b) => b.key.compareTo(a.key)); // datas mais recentes primeiro
+      ..sort((a, b) => b.key.compareTo(a.key));
 
     return entradas;
   }
@@ -497,9 +496,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
             children: [
               Container(
                 width: double.infinity,
-                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                // padding vertical, e a soma devolve a posição original
-                // do título — medida, não deduzida.
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
@@ -552,9 +548,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    // Wrap em vez de Row: as três chips não cabiam lado a
-                    // lado com fonte ampliada (65px de estouro). Truncar
-                    // "Semana" seria pior do que deixar quebrar a linha.
                     Wrap(
                       runSpacing: 8,
                       children: ['Hoje', 'Semana', 'Mês'].map((f) {
@@ -688,8 +681,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
   Widget _painelDeErro(BuildContext context) {
     return Center(
-      // Rolagem: em paisagem o painel não cabia na altura que sobra
-      // (264px de estouro com fonte ampliada).
       child: SingleChildScrollView(
         child: Padding(
         padding: const EdgeInsets.all(24),

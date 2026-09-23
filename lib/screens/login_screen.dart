@@ -54,7 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Login deu certo — navega direto, sem depender só do StreamBuilder
     final jaConfigurou = await GestacaoStorage.restaurarDUM();
     if (!mounted) return;
 
@@ -66,9 +65,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // A mesma frase para conta existente e inexistente. Confirmar aqui que o
-  // e-mail está cadastrado transformaria o formulário num verificador de
-  // contas de gestantes.
   static const String _avisoNeutroDeRecuperacao =
       'Se houver uma conta com esse e-mail, enviamos um link para redefinir '
       'a senha. Verifique também a caixa de spam.';
@@ -187,8 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      // O Scaffold continua encolhendo com o teclado de propósito: é isso que
-      // deixa o SingleChildScrollView trazer os campos para cima dele.
       body: MolduraResponsiva(
         child: Center(
             child: SingleChildScrollView(

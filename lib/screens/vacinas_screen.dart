@@ -947,8 +947,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
   Widget _painelDeErro(BuildContext context, String mensagem) {
     return Center(
-      // Rolagem: em paisagem e com fonte ampliada o painel não cabia na
-      // altura que sobra.
       child: SingleChildScrollView(
         child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1104,8 +1102,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
 
   Widget _painelSemGestacao(BuildContext context) {
     return Center(
-      // Rolagem: em paisagem e com fonte ampliada o painel não cabia na
-      // altura que sobra.
       child: SingleChildScrollView(
         child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1175,9 +1171,6 @@ class _VacinasScreenState extends State<VacinasScreen> {
             children: [
               Container(
                 width: double.infinity,
-                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                // padding vertical, e a soma devolve a posição original
-                // do título — medida, não deduzida.
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),

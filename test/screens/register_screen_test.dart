@@ -8,9 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Primeira cobertura da Register: até aqui era a única tela do app sem
-  // nenhum teste. Sem supressor de overflow e sem clamp de fonte para baixo
-  // — um RenderFlex estourado reprova o teste.
 
   String fonte() => File('lib/screens/register_screen.dart')
       .readAsLinesSync()
@@ -39,7 +36,6 @@ void main() {
     escalaDeTexto: escalaDeTexto,
   );
 
-  /// Tudo que precisa sobreviver a qualquer combinação de tela e fonte.
   void esperarFormularioInteiro() {
     expect(find.text('Criar conta'), findsWidgets);
     expect(find.text('Comece a acompanhar sua gestação'), findsOneWidget);
@@ -179,7 +175,6 @@ void main() {
     ) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // Mesmo número conferido no framebuffer do Motorola G10.
       expect(cartao(tester).width, closeTo(387.43, 1));
     });
 
@@ -342,8 +337,6 @@ void main() {
     });
 
     test('o Scaffold continua encolhendo com o teclado', () {
-      // Os campos estão na própria tela: encolher é o que permite ao scroll
-      // trazê-los para cima do teclado.
       final corpo = corpoDoMetodo('Widget build(BuildContext context)');
 
       expect(corpo, isNot(contains('resizeToAvoidBottomInset: false')));
@@ -360,8 +353,6 @@ void main() {
     });
 
     test('nenhum supressor de overflow na tela nem no teste', () {
-      // Agulhas por concatenação: como literais inteiros, casariam com esta
-      // própria asserção.
       final agulhas = ['ignorarOverflow' 'DeLayout', 'FlutterError.' 'onError'];
 
       final esteTeste = File(

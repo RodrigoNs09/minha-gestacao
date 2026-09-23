@@ -220,7 +220,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 90),
                   children: [
-                    // Card de status
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -269,7 +268,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Gráfico com dados reais — CORRIGIDO
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -355,7 +353,6 @@ class _AnaliseScreenState extends State<AnaliseScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Resumo
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

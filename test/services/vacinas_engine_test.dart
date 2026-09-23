@@ -6,8 +6,6 @@ import 'package:suacontracao_ai/models/registro_vacinacao.dart';
 import 'package:suacontracao_ai/services/vacinas_engine.dart';
 
 void main() {
-  // DUM fixa e data corrente derivada dela: nenhum teste depende do
-  // relógio da máquina.
   final dum = DateTime(2026, 1, 5);
 
   DateTime dataNaSemana(int semana) => dum.add(Duration(days: semana * 7));
@@ -100,7 +98,6 @@ void main() {
 
   group('dTpa — janela a partir da 20ª semana', () {
     test('19 semanas: não disponível', () {
-      // 139 dias = 19 semanas e 6 dias, a borda de dentro.
       final dtpa = statusDe(avaliarEm(diasGestacaoBruto: 139), codigoDtpa);
 
       expect(dtpa.estado, EstadoVacina.naoDisponivel);
@@ -201,7 +198,6 @@ void main() {
     });
 
     test('registro sem vínculo com esta gestação não vira REGISTRADA', () {
-      // Sem dumNoRegistro não há como afirmar que a dose é desta gestação.
       final resultado = avaliarEm(
         diasGestacaoBruto: 200,
         historico: [doseRegistrada(codigoDtpa)],
@@ -222,8 +218,6 @@ void main() {
     });
 
     test('registrada permanece registrada mesmo com gestação indeterminada', () {
-      // dataAtual explícita: sem ela o helper derivaria uma data anterior à
-      // dose, que agora seria lida como aplicação no futuro.
       final resultado = avaliarEm(
         diasGestacaoBruto: -30,
         dataAtual: DateTime(2026, 7, 1),
@@ -247,8 +241,6 @@ void main() {
       );
 
       final dtpa = statusDe(resultado, codigoDtpa);
-      // Sem vínculo, o registro não diz nada sobre esta gestação: nem prova
-      // aplicação, nem trava a janela em VERIFICAR_HISTORICO.
       expect(dtpa.estado, EstadoVacina.periodoRecomendado);
       expect(dtpa.estado, isNot(EstadoVacina.registrada));
     });
@@ -287,7 +279,6 @@ void main() {
     });
 
     test('situação desconhecida COM vínculo continua bloqueando', () {
-      // O contraste que prova que o critério é o vínculo, não a situação.
       final resultado = avaliarEm(
         diasGestacaoBruto: 200,
         historico: [
@@ -313,8 +304,6 @@ void main() {
   });
 
   group('dosesPorGestacao — a engine lê o valor declarado pela regra', () {
-    // Calendário sintético, só para provar o contrato estrutural: nenhuma
-    // regra clínica nova entra no PNI-2026 por causa deste teste.
     const codigoFicticio = 'REGRA_DE_TESTE';
 
     List<RegraCalendario> calendarioCom({required int? dosesPorGestacao}) {
@@ -398,7 +387,6 @@ void main() {
 
       final dtpa = statusDe(resultado, codigoDtpa);
       expect(dtpa.estado, EstadoVacina.verificarHistorico);
-      // Nem tratada como aplicada, nem como ausente.
       expect(dtpa.estado, isNot(EstadoVacina.registrada));
       expect(dtpa.estado, isNot(EstadoVacina.periodoRecomendado));
     });
@@ -421,8 +409,6 @@ void main() {
     test('ausência de histórico não é lida como dose não realizada', () {
       final semHistorico = statusDe(avaliarEm(diasGestacaoBruto: 200), codigoDtpa);
 
-      // O estado é o mesmo do período aberto, e a mensagem não afirma que
-      // ela deixou de tomar: apenas que o período começou.
       expect(semHistorico.estado, EstadoVacina.periodoRecomendado);
       expect(semHistorico.mensagem, mensagemPeriodoRecomendado);
       expect(semHistorico.mensagem.toLowerCase(), isNot(contains('não tomou')));
@@ -461,8 +447,6 @@ void main() {
     });
 
     test('a semana não é clampeada como em GestacaoInfo', () {
-      // GestacaoInfo.semanaAtual devolveria 1 e 42 nestes casos, escondendo
-      // justamente o que a engine precisa enxergar.
       expect(semanaGestacionalDe(0), 0);
       expect(semanaGestacionalDe(139), 19);
       expect(semanaGestacionalDe(140), 20);
@@ -496,8 +480,6 @@ void main() {
     test('avaliar a regra isolada não lança em nenhuma condição', () {
       final febreAmarela = regraPorCodigo(codigoFebreAmarela)!;
 
-      // Não existe caminho de exceção para esta regra: nem sem histórico,
-      // nem com registro, nem com gestação absurda.
       for (final dias in [-500, -1, 0, 140, 294, 1000]) {
         expect(
           () => VacinasEngine.avaliar(
@@ -533,7 +515,6 @@ void main() {
     });
 
     test('respeita ano bissexto', () {
-      // 2028 é bissexto: 29 dias em fevereiro.
       expect(adicionarMeses(DateTime(2027, 8, 31), 6), DateTime(2028, 2, 29));
       expect(adicionarMeses(DateTime(2028, 2, 29), 12), DateTime(2029, 2, 28));
     });
@@ -623,8 +604,6 @@ void main() {
     });
 
     test('5. dose anterior à gestação não conta como desta, mas conta no intervalo', () {
-      // Dose de outra gestação, recente demais: não é dose desta gestação,
-      // mas impede afirmar que o intervalo foi cumprido.
       final covid = covidEm(
         diasGestacaoBruto: 200,
         dataAtual: DateTime(2026, 7, 1),
@@ -666,7 +645,6 @@ void main() {
       );
 
       expect(covid.estado, isNot(EstadoVacina.registrada));
-      // Intervalo antigo já cumprido, então a janela está aberta.
       expect(covid.estado, EstadoVacina.periodoRecomendado);
     });
 
@@ -688,9 +666,6 @@ void main() {
     });
 
     test('8b. situação desconhecida sem DUM: VERIFICAR_HISTORICO', () {
-      // Sem vínculo, o registro não é atribuído a esta gestação — mas o
-      // intervalo desta regra conta qualquer dose anterior, então não dá
-      // para concluir que não há dose a considerar.
       final covid = covidEm(
         diasGestacaoBruto: 200,
         historico: [
@@ -723,8 +698,6 @@ void main() {
     });
 
     test('8d. situação desconhecida de outra gestação não infere vínculo', () {
-      // O registro traz DUM de outra gestação: a relevância dele está
-      // determinada, e a engine não o puxa para esta gestação.
       final covid = covidEm(
         diasGestacaoBruto: 200,
         historico: [
@@ -756,7 +729,6 @@ void main() {
     });
 
     test('dose sem data prevalece mesmo havendo outra antiga com data', () {
-      // A dose sem data pode ter sido ontem; não dá para concluir nada.
       final covid = covidEm(
         diasGestacaoBruto: 200,
         dataAtual: DateTime(2027, 1, 1),
@@ -789,7 +761,6 @@ void main() {
     test('9. virada de ano é tratada corretamente', () {
       final ultima = DateTime(2026, 10, 20);
 
-      // 20/10/2026 + 6 meses = 20/04/2027.
       expect(
         covidEm(
           diasGestacaoBruto: 200,
@@ -845,7 +816,6 @@ void main() {
         historico: historico,
       );
 
-      // Mesmas entradas exceto a data injetada: o resultado muda.
       expect(antes.estado, EstadoVacina.aguardarIntervalo);
       expect(depois.estado, EstadoVacina.periodoRecomendado);
       expect(antes.estado, isNot(depois.estado));
@@ -854,9 +824,6 @@ void main() {
     test('12. a decisão vem da dataAtual injetada, não do relógio', () {
       final historico = [doseCovid(dataAplicacao: DateTime(2026, 1, 15))];
 
-      // Uma data no passado distante e outra no futuro distante em relação
-      // a qualquer "agora" real: se a engine consultasse o relógio, uma
-      // destas daria o mesmo resultado da outra.
       final passado = covidEm(
         diasGestacaoBruto: 200,
         dataAtual: DateTime(2026, 2, 1),
@@ -933,7 +900,6 @@ void main() {
     }
 
     test('0. a temporada avaliada é a que a versão do calendário declara', () {
-      // O identificador vem do calendário, não de uma string solta no teste.
       expect(temporadaInfluenzaPni2026, temporadaAtual);
 
       final registrada = influenzaEm(
@@ -975,8 +941,6 @@ void main() {
     });
 
     test('0e. a data da aplicação não substitui o identificador', () {
-      // Uma dose datada dentro de 2026, mas sem temporada declarada, não
-      // vira dose de 2026: a engine não deduz a temporada da data.
       final status = influenzaEm(
         temporada: temporadaInfluenzaPni2026,
         historico: [
@@ -1054,8 +1018,6 @@ void main() {
     });
 
     test('6b. sem temporada, nem uma dose registrada muda o resultado', () {
-      // A engine não deduz a temporada do registro para "descobrir" qual é
-      // a vigente.
       final influenza = influenzaEm(
         temporada: null,
         historico: [doseInfluenza(temporada: temporadaAtual)],
@@ -1069,7 +1031,6 @@ void main() {
         historico: [doseInfluenza(temporada: null)],
       );
 
-      // Não prova aplicação nesta temporada, e também não bloqueia.
       expect(influenza.estado, EstadoVacina.periodoRecomendado);
       expect(influenza.estado, isNot(EstadoVacina.registrada));
       expect(influenza.estado, isNot(EstadoVacina.verificarHistorico));
@@ -1114,8 +1075,6 @@ void main() {
     });
 
     test('11. a comparação de temporada é igualdade estrita', () {
-      // Espaço em branco e outro formato são temporadas diferentes: a
-      // engine não normaliza nem interpreta o identificador.
       for (final outra in ['2026 ', ' 2026', '2026/2027', '2026-SUL', '']) {
         final influenza = influenzaEm(
           historico: [doseInfluenza(temporada: outra)],
@@ -1130,7 +1089,6 @@ void main() {
     });
 
     test('12. a data de aplicação não influencia a decisão', () {
-      // Qualquer data válida serve: a temporada é a chave, não a data.
       final datas = <DateTime?>[
         null,
         DateTime(2020, 1, 1),
@@ -1162,8 +1120,6 @@ void main() {
     });
 
     test('12b. data recente de temporada anterior não vira dose atual', () {
-      // Data de aplicação dentro do ano da temporada vigente, mas snapshot
-      // de temporada anterior: vale o snapshot, não a data.
       final influenza = influenzaEm(
         historico: [
           doseInfluenza(
@@ -1179,7 +1135,6 @@ void main() {
     test('13. mudar a temporada devolve a vacina ao período recomendado', () {
       final historico = [doseInfluenza(temporada: temporadaAtual)];
 
-      // Mesma gestação, mesmo histórico: só a temporada vigente muda.
       expect(
         influenzaEm(historico: historico, temporada: temporadaAtual).estado,
         EstadoVacina.registrada,
@@ -1198,8 +1153,6 @@ void main() {
         SituacaoInformada.situacaoDesconhecida: EstadoVacina.verificarHistorico,
       };
 
-      // Cobre todos os valores do enum: se um valor novo aparecer, o teste
-      // falha por não estar mapeado.
       expect(esperado.keys.toSet(), SituacaoInformada.values.toSet());
 
       esperado.forEach((situacao, estado) {
@@ -1427,13 +1380,10 @@ void main() {
       expect(status.estado, EstadoVacina.aguardarIntervalo);
       expect(status.motivo, contains('mínimo'));
       expect(status.motivo, isNot(contains('mínimo cumprido')));
-      // O mínimo realmente não foi cumprido: a mensagem pode dizer isso.
       expect(status.mensagem, mensagemAguardarIntervalo);
     });
 
     test('8. mínimos cumpridos mas recomendado 1→3 não: AGUARDAR_INTERVALO', () {
-      // 10/01 + 4 meses (mínimo 1→3) = 10/05; 10/02 + 2 meses = 10/04.
-      // O recomendado 1→3 (6 meses) só completa em 10/07.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1444,7 +1394,6 @@ void main() {
 
       expect(status.estado, EstadoVacina.aguardarIntervalo);
       expect(status.motivo, contains('mínimo cumprido'));
-      // A mensagem não pode afirmar que o mínimo falta: ele foi cumprido.
       expect(status.mensagem, mensagemAguardarRecomendado);
       expect(status.mensagem, isNot(mensagemAguardarIntervalo));
     });
@@ -1494,8 +1443,6 @@ void main() {
         historico: [
           dose(numero: 1, data: primeiraDose),
           dose(numero: 2, data: DateTime(2026, 2, 10)),
-          // Erro de digitação no ano: os três intervalos mínimos passam,
-          // mas a dose ainda não aconteceu.
           dose(numero: 3, data: DateTime(2027, 1, 10)),
         ],
         dataAtual: DateTime(2026, 9, 5),
@@ -1547,8 +1494,6 @@ void main() {
         dataAtual: DateTime(2026, 6, 1),
       );
 
-      // Uma dose que ainda não aconteceu não sustenta conclusão nenhuma,
-      // esteja o esquema completo ou não.
       expect(incompleto.estado, EstadoVacina.verificarHistorico);
       expect(completo.estado, EstadoVacina.verificarHistorico);
       expect(incompleto.estado, completo.estado);
@@ -1573,7 +1518,6 @@ void main() {
     });
 
     test('cronologia: dose 2 anterior à dose 1, com esquema incompleto', () {
-      // A inconsistência é detectada mesmo faltando a terceira dose.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: DateTime(2026, 3, 10)),
@@ -1630,8 +1574,6 @@ void main() {
     });
 
     test('cronologia: dose sem data não dispara falso positivo', () {
-      // Sem data não há como comparar; o caminho segue para as demais
-      // validações, que exigem data.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1709,7 +1651,6 @@ void main() {
     });
 
     test('10e. mínimo 1→2 não cumprido: não é REGISTRADA', () {
-      // 10/01 → 20/01: menos de 1 mês entre a 1ª e a 2ª dose.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1725,7 +1666,6 @@ void main() {
     });
 
     test('10f. mínimo 2→3 não cumprido: não é REGISTRADA', () {
-      // 10/02 → 20/02: menos de 2 meses entre a 2ª e a 3ª dose.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1740,7 +1680,6 @@ void main() {
     });
 
     test('10g. mínimo 1→3 não cumprido: não é REGISTRADA', () {
-      // 1→2 e 2→3 cumpridos, mas 1→3 fecha em 3 meses, abaixo dos 4 mínimos.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1755,7 +1694,6 @@ void main() {
     });
 
     test('10h. mínimos exatamente cumpridos: REGISTRADA', () {
-      // 10/01 → 10/02 (1 mês) → 10/05 (3 meses depois da 2ª, 4 meses da 1ª).
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose),
@@ -1834,7 +1772,6 @@ void main() {
         dataAtual: DateTime(2026, 6, 1),
       );
 
-      // Sem nenhuma dose aplicada, o esquema segue indeterminado.
       expect(status.estado, EstadoVacina.verificarHistorico);
       expect(status.motivo, contains('sem dose registrada'));
     });
@@ -1865,8 +1802,6 @@ void main() {
     });
 
     test('18. nova gestação não reinicia o esquema', () {
-      // Duas doses aplicadas sob outra DUM continuam contando: a próxima é
-      // a 3ª, não a 1ª.
       final status = hepatiteEm(
         historico: [
           dose(numero: 1, data: primeiraDose, dumNoRegistro: DateTime(2020, 3, 10)),
@@ -1896,7 +1831,6 @@ void main() {
     });
 
     test('20. virada de mês e ano bissexto na aritmética dos intervalos', () {
-      // 31/01 + 1 mês = 28/02 (2026 não é bissexto).
       expect(
         hepatiteEm(
           historico: [dose(numero: 1, data: DateTime(2026, 1, 31))],
@@ -1912,7 +1846,6 @@ void main() {
         EstadoVacina.periodoRecomendado,
       );
 
-      // 31/01/2028 + 1 mês = 29/02/2028 (bissexto).
       expect(
         hepatiteEm(
           historico: [dose(numero: 1, data: DateTime(2028, 1, 31))],
@@ -1935,8 +1868,6 @@ void main() {
         dose(numero: 2, data: DateTime(2026, 2, 10)),
       ];
 
-      // 1→3 mínimo (4 meses de 10/01/2025) e recomendado (6 meses) já
-      // cumpridos: quem manda é o mínimo 2→3, que completa em 10/04/2026.
       expect(
         hepatiteEm(historico: historico, dataAtual: DateTime(2026, 4, 9)).estado,
         EstadoVacina.aguardarIntervalo,
@@ -2022,8 +1953,6 @@ void main() {
     });
 
     test('dose de referência ausente leva a VERIFICAR_HISTORICO', () {
-      // Só a dose 2: a próxima ausente é a 1, que não tem intervalo
-      // declarado que leve até ela.
       final status = hepatiteEm(
         historico: [dose(numero: 2, data: DateTime(2026, 2, 10))],
         dataAtual: DateTime(2026, 8, 1),
@@ -2283,8 +2212,6 @@ void main() {
     });
 
     test('8. dTpa isolada a partir da 20ª semana abre o esquema', () {
-      // 200 dias são cerca de 28 semanas: sem dT no histórico, a dTpa pode
-      // representar a 1ª dose de quem chega ao serviço já na gestação.
       final status = dtEm(historico: [doseDtpa(data: DateTime(2026, 1, 10))]);
 
       expect(status.estado, EstadoVacina.periodoRecomendado);
@@ -2336,7 +2263,6 @@ void main() {
     });
 
     test('8e. com uma dT no histórico a dTpa conta em qualquer semana', () {
-      // A dT já ancora o esquema: a janela da dTpa não entra na conta.
       final status = statusDe(
         avaliarEm(
           diasGestacaoBruto: 100,
@@ -2451,7 +2377,6 @@ void main() {
       expect(duplicada.estado, EstadoVacina.verificarHistorico);
       expect(duplicada.estado, isNot(EstadoVacina.registrada));
       expect(duplicada.motivo, contains('indistinguíveis'));
-      // Contraste: datas distintas continuam sendo duas doses.
       expect(emDatasDistintas.estado, EstadoVacina.registrada);
     });
 
@@ -2475,8 +2400,6 @@ void main() {
     });
 
     test('8m. com o esquema completo por dT a duplicidade não muda nada', () {
-      // As doses de outra vacina já são reforço: não ocupam posição e não
-      // precisam ser distinguidas entre si.
       final status = dtEm(
         historico: [
           doseDt(numero: 1, data: DateTime(2026, 1, 10)),
@@ -2520,7 +2443,6 @@ void main() {
     });
 
     test('9. dTpa é dose relevante para o intervalo', () {
-      // dTpa recente segura a próxima dose, mesmo o esquema estando incompleto.
       final status = dtEm(
         historico: [
           doseDt(numero: 1, data: DateTime(2026, 1, 10)),
@@ -2547,7 +2469,6 @@ void main() {
           ],
         );
 
-        // A dose recente da outra vacina não segura o intervalo do dT.
         expect(status.estado, EstadoVacina.periodoRecomendado, reason: codigo);
       }
     });
@@ -2654,9 +2575,7 @@ void main() {
 
       expect(antesDoMinimo.motivo, isNot(contains('excepcional')));
       expect(aposOMinimo.motivo, contains('excepcional'));
-      // Mesmo estado: a engine não caracteriza a exceção.
       expect(antesDoMinimo.estado, aposOMinimo.estado);
-      // Mas a mensagem acompanha o motivo, sem afirmar o contrário dele.
       expect(antesDoMinimo.mensagem, mensagemAguardarIntervalo);
       expect(aposOMinimo.mensagem, mensagemAguardarRecomendado);
     });
@@ -2735,7 +2654,6 @@ void main() {
         },
         intervaloRecomendadoDesdeUltimaDose: Intervalo.dias(60),
       ),
-      // Só um dos componentes: com containsAll, não entra na contagem.
       const RegraJanelaSemana(
         codigo: codigoParcial,
         nomeExibicao: 'Parcial de teste',
@@ -2784,7 +2702,6 @@ void main() {
         registro(codigoParcial, DateTime(2026, 7, 25)),
       ]);
 
-      // A dose parcial não completa o esquema nem segura o intervalo.
       expect(status.estado, EstadoVacina.periodoRecomendado);
     });
 
@@ -2807,8 +2724,6 @@ void main() {
     });
 
     test('sem componentes declarados, nenhuma vacina entra na contagem', () {
-      // containsAll de um conjunto vazio é verdadeiro para toda regra: sem a
-      // guarda, qualquer dose do calendário contaria como dose desta vacina.
       const codigoSemComponentes = 'SEM_COMPONENTES_DE_TESTE';
 
       final calendarioSemComponentes = <RegraCalendario>[
@@ -2881,12 +2796,6 @@ void main() {
     });
 
     test('janelas por semana (dTpa/VSR) não mudam com a dataAtual', () {
-      // Duas datas correntes muito distantes entre si, mesmos dias de
-      // gestação: as janelas por semana produzem o mesmo estado. Quem manda
-      // nelas é a idade gestacional, não o calendário civil.
-      //
-      // Vale só para RegraJanelaSemana: o COVID-19 depende legitimamente da
-      // dataAtual, e por isso é verificado à parte.
       final comUmaData = avaliarEm(
         diasGestacaoBruto: 140,
         dataAtual: DateTime(2026, 5, 25),
@@ -2906,7 +2815,6 @@ void main() {
     });
 
     test('dTpa e VSR dependem da gestação, não da dataAtual', () {
-      // Mesma dataAtual, gestações diferentes: o estado muda.
       final mesmaData = DateTime(2026, 8, 1);
 
       final antesDaJanela = avaliarEm(
@@ -2923,8 +2831,6 @@ void main() {
     });
 
     test('COVID-19 depende da dataAtual, não da idade gestacional', () {
-      // O contraste com o teste acima: aqui a gestação é a mesma e só a
-      // data corrente muda — e é ela que decide.
       final historico = [
         RegistroVacinacao(
           vacinaCodigo: codigoCovid19,
@@ -2950,7 +2856,6 @@ void main() {
     });
 
     test('COVID-19 não muda com a gestação quando a dataAtual é a mesma', () {
-      // A recíproca: variar a idade gestacional não move o intervalo.
       final historico = [
         RegistroVacinacao(
           vacinaCodigo: codigoCovid19,
@@ -3069,8 +2974,6 @@ void main() {
     });
 
     test('5. registro futuro não satisfaz a contagem de doses do esquema', () {
-      // Três doses de dT, a terceira ainda não aplicada: não é esquema
-      // completo.
       final dt = statusPara(codigoDt, [
         dose(codigoDt, data: DateTime(2026, 1, 10), numero: 1),
         dose(codigoDt, data: DateTime(2026, 3, 10), numero: 2),
@@ -3082,7 +2985,6 @@ void main() {
     });
 
     test('6. registro futuro não cumpre o intervalo mínimo', () {
-      // Sozinha, uma dose de amanhã não libera nada por intervalo.
       final covid = statusPara(codigoCovid19, [
         dose(codigoCovid19, data: amanha),
       ]);
@@ -3098,8 +3000,6 @@ void main() {
         dose(codigoDtpa, data: amanha, dumNoRegistro: dum),
       ]);
 
-      // A dose de ontem já encerra a dose por gestação; a de amanhã não
-      // apaga isso nem melhora a conclusão.
       expect(dtpa.estado, EstadoVacina.registrada);
     });
 
@@ -3199,7 +3099,6 @@ void main() {
     });
 
     test('2. vacinaCodigo vazio não altera nenhum status', () {
-      // É o que fromMap produz quando o campo falta ou vem com tipo errado.
       final semNada = avaliarCom(const []);
       final comVazio = avaliarCom([registro('')]);
 
@@ -3207,9 +3106,6 @@ void main() {
     });
 
     test('3. código desconhecido não entra no esquema do dT', () {
-      // Os componentes vêm da regra do calendário, nunca do registro: um
-      // código parecido com o de uma vacina da família dT não é lido como
-      // tal. O modelo sequer tem campo de composição.
       final comDose = avaliarCom([
         registro(codigoDt, data: DateTime(2026, 1, 10), numero: 1),
       ]);
@@ -3242,8 +3138,6 @@ void main() {
 
       esperarIdentico(comOrfaos, soValidos);
 
-      // Sanidade: os válidos realmente produziram conclusão, senão o teste
-      // compararia dois resultados vazios.
       expect(
         soValidos.firstWhere((s) => s.vacinaCodigo == codigoDtpa).estado,
         EstadoVacina.registrada,
@@ -3259,8 +3153,6 @@ void main() {
     const codigoAposentada = 'VACINA_APOSENTADA';
     final hoje = DateTime(2026, 8, 1);
 
-    // Calendário sintético: nesta versão do PNI nenhuma das sete está
-    // descontinuada, então o cenário é montado aqui.
     const descontinuadaSemComponentes = RegraDescontinuada(
       codigo: codigoAposentada,
       nomeExibicao: 'Vacina aposentada',
@@ -3355,7 +3247,6 @@ void main() {
         historico: [dose(codigoAposentada)],
       );
 
-      // Os sete primeiros status são os do calendário vigente, na ordem.
       expect(comDescontinuada, hasLength(semDescontinuada.length + 1));
 
       for (var i = 0; i < semDescontinuada.length; i++) {
@@ -3372,7 +3263,6 @@ void main() {
     });
 
     test('a entrada no esquema do dT segue a composição, não o tipo', () {
-      // Sem componentes declarados, não conta para o dT.
       final semComponentes = avaliarCom(
         calendario: calendarioCom(descontinuadaSemComponentes),
         historico: [
@@ -3383,8 +3273,6 @@ void main() {
 
       expect(semComponentes.motivo, contains('dose 2'));
 
-      // Declarando diftérico e tetânico, conta — descontinuada ou não, a
-      // dose aplicada continha os componentes.
       const comComponentes = RegraDescontinuada(
         codigo: codigoAposentada,
         nomeExibicao: 'Vacina aposentada',
@@ -3404,7 +3292,6 @@ void main() {
     });
 
     test('6. todos os tipos de regra continuam tratados sem exceção', () {
-      // Um calendário com um exemplar de cada subtipo de RegraCalendario.
       final deTodosOsTipos = <RegraCalendario>[
         ...calendarioPni2026,
         descontinuadaSemComponentes,
@@ -3428,8 +3315,6 @@ void main() {
     });
 
     test('8. dose legada fora da faixa atual não lança e fica conservadora', () {
-      // Esquema de hepatite B hoje tem 3 posições; um registro legado com
-      // dose 4 continua sendo tratado pela regra de histórico.
       final status = avaliarCom(
         calendario: calendarioPni2026,
         historico: [
@@ -3457,7 +3342,6 @@ void main() {
     });
 
     test('1 e 8. DUM com hora não desloca a semana ao longo do dia', () {
-      // DUM derivada de "20 semanas" às 09:00: carrega a hora.
       final dum = DateTime(2026, 1, 5, 9, 0);
       final diaDaVirada = DateTime(2026, 5, 25);
 
@@ -3492,7 +3376,6 @@ void main() {
     test('3 e 4. as bordas de semana não dependem da hora', () {
       final dum = DateTime(2026, 1, 5, 14, 30);
 
-      // 139 dias após a DUM continua semana 19; 140, semana 20.
       for (final hora in [0, 9, 14, 15, 23]) {
         final vespera = DateTime(2026, 5, 24, hora);
         final aVirada = DateTime(2026, 5, 25, hora);
@@ -3516,7 +3399,6 @@ void main() {
       expect(adicionarDias(DateTime(2026, 1, 10, 0, 1), 60),
           DateTime(2026, 3, 11));
 
-      // Virada de mês, de ano e ano bissexto.
       expect(adicionarDias(DateTime(2026, 1, 31), 1), DateTime(2026, 2, 1));
       expect(adicionarDias(DateTime(2026, 12, 31), 1), DateTime(2027, 1, 1));
       expect(adicionarDias(DateTime(2028, 2, 28), 1), DateTime(2028, 2, 29));
@@ -3536,14 +3418,12 @@ void main() {
     });
 
     test('10. os intervalos em meses continuam iguais aos atuais', () {
-      // adicionarMeses não foi tocado: convenção de último dia do mês.
       expect(adicionarMeses(DateTime(2026, 8, 31), 6), DateTime(2027, 2, 28));
       expect(adicionarMeses(DateTime(2027, 8, 31), 6), DateTime(2028, 2, 29));
       expect(adicionarMeses(DateTime(2026, 3, 31), 1), DateTime(2026, 4, 30));
       expect(adicionarMeses(DateTime(2026, 1, 10), 6), DateTime(2026, 7, 10));
       expect(adicionarMeses(DateTime(2026, 10, 5), 6), DateTime(2027, 4, 5));
 
-      // E continua diferente de somar 180 dias.
       expect(
         adicionarMeses(DateTime(2026, 1, 10), 6),
         isNot(adicionarDias(DateTime(2026, 1, 10), 180)),
@@ -3565,7 +3445,6 @@ void main() {
       final dtpa = resultado.firstWhere((s) => s.vacinaCodigo == codigoDtpa);
       final vsr = resultado.firstWhere((s) => s.vacinaCodigo == codigoVsr);
 
-      // 05/01 + 140 dias = 25/05; + 196 dias = 20/07. Sem resto de hora.
       expect(dtpa.proximaJanela!.dataEstimada, DateTime(2026, 5, 25));
       expect(vsr.proximaJanela!.dataEstimada, DateTime(2026, 7, 20));
       expect(dtpa.proximaJanela!.dataEstimada.hour, 0);
@@ -3573,8 +3452,6 @@ void main() {
     });
 
     test('o estado e a próxima janela não se contradizem', () {
-      // Se a janela ainda não abriu, a data estimada não pode ser hoje nem
-      // no passado.
       final dum = DateTime(2026, 1, 5, 14, 30);
 
       for (final dias in [0, 100, 139, 195]) {
@@ -3619,11 +3496,8 @@ void main() {
       expect('int diasDeCalendarioEntre('.allMatches(engine), hasLength(1));
       expect('DateTime adicionarDias('.allMatches(engine), hasLength(1));
 
-      // Nenhuma soma de dias por duração absoluta sobrou na engine.
       expect(engine, isNot(contains('Duration(days:')));
 
-      // O único difference é o de dentro da própria fonte única, e ele
-      // opera sobre datas já normalizadas em UTC.
       expect('.difference('.allMatches(engine), hasLength(1));
       expect(engine, contains('fim.difference(inicio).inDays'));
       expect(engine, contains('DateTime.utc(de.year, de.month, de.day)'));
@@ -3673,7 +3547,6 @@ void main() {
     }
 
     test('mesmo gestacaoId vincula mesmo com DUM diferente', () {
-      // A DUM foi corrigida em 12 dias: sem identidade, o registro sumiria.
       final dtpa = statusPara(
         codigoDtpa,
         [dose(codigoDtpa, dumNoRegistro: dum, gestacaoId: idAtual)],
@@ -3730,8 +3603,6 @@ void main() {
     });
 
     test('sem gestacaoId atual, tudo cai no comportamento antigo', () {
-      // Enquanto a gestação persistida não tiver id, o registro com id
-      // também é avaliado pela DUM.
       final status = statusPara(
         codigoDtpa,
         [dose(codigoDtpa, dumNoRegistro: dum, gestacaoId: idAtual)],
@@ -3763,7 +3634,6 @@ void main() {
         gestacaoId: idAtual,
       );
 
-      // A dose de outra gestação continua contando no esquema de vida.
       final dt = resultado.firstWhere((s) => s.vacinaCodigo == codigoDt);
       expect(dt.estado, EstadoVacina.verificarHistorico);
       expect(dt.motivo, contains('sem posição'));
@@ -3773,8 +3643,6 @@ void main() {
   group('Vínculo legado — tolerância de DUM', () {
     final hoje = DateTime(2026, 8, 1);
 
-    // Cenário real da migração: a gestação já tem identidade, mas o registro
-    // foi feito antes de o campo existir.
     const idDaGestacao = 'gestacao-atual';
 
     RegistroVacinacao dose(
@@ -3792,7 +3660,6 @@ void main() {
       );
     }
 
-    // A DUM corrigida é a da avaliação; a do registro é o snapshot antigo.
     StatusVacinacao statusPara(
       String codigo,
       List<RegistroVacinacao> historico, {
@@ -3868,8 +3735,6 @@ void main() {
     });
 
     test('diferença claramente grande não vincula', () {
-      // 63 dias é o caso mais apertado de duas gestações distintas; 280 é
-      // uma gestação inteira.
       for (final codigo in [codigoDtpa, codigoVsr, codigoCovid19]) {
         for (final dias in [63, 120, 280, 730]) {
           expect(vinculaComDeslocamento(codigo, dias), isFalse,
@@ -3886,7 +3751,6 @@ void main() {
         gestacaoId: null,
       );
 
-      // 05/01 a 16/02 são 42 dias civis: ainda dentro.
       expect(diasDeCalendarioEntre(DateTime(2026, 1, 5), DateTime(2026, 2, 16)),
           42);
       expect(status.estado, EstadoVacina.registrada);
@@ -3935,7 +3799,6 @@ void main() {
         final status = statusPara(
           codigo,
           [dose(codigo, dumNoRegistro: dum, gestacaoId: idAtual)],
-          // 300 dias: muito além dos 42 da tolerância.
           dumDaAvaliacao: adicionarDias(dum, 300),
           gestacaoId: idAtual,
         );
@@ -3957,7 +3820,6 @@ void main() {
     });
 
     test('id diferente dentro da tolerância também NÃO vincula', () {
-      // A tolerância não pode resgatar um registro que a identidade rejeitou.
       for (final dias in [0, 7, 42]) {
         final status = statusPara(
           codigoDtpa,
@@ -3983,7 +3845,6 @@ void main() {
       );
 
       expect(comIdAtual.estado, EstadoVacina.registrada);
-      // Sem id na avaliação cai no legado, e sem DUM não há como vincular.
       expect(semIdNaAvaliacao.estado, isNot(EstadoVacina.registrada));
     });
 
@@ -4001,9 +3862,6 @@ void main() {
   });
 
   group('Pureza', () {
-    // Só o código executável interessa: a documentação da engine cita
-    // "DateTime.now()" e "BuildContext" justamente para dizer que não os
-    // usa, e uma busca no arquivo inteiro acusaria esses comentários.
     List<String> linhasDeCodigo() {
       return File('lib/services/vacinas_engine.dart')
           .readAsLinesSync()

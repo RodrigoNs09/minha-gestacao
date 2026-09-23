@@ -237,9 +237,6 @@ void main() {
     });
 
     test('contrato: os códigos são estáveis entre versões do PNI', () {
-      // Política do projeto: uma nova versão pode mudar parâmetros de uma
-      // regra, mas nunca renomeia um código. Se alguém renomear, este teste
-      // quebra de propósito — registros antigos ficariam órfãos.
       expect(calendarioPni2026.map((r) => r.codigo).toList(), [
         'HEPATITE_B',
         'DT',
@@ -262,9 +259,6 @@ void main() {
     });
 
     test('uma regra descontinuada continua sendo achada pelo código', () {
-      // regraPorCodigo compara só o código, sem olhar o tipo da regra: uma
-      // regra descontinuada presente na lista é encontrada como qualquer
-      // outra, e por isso não vira registro órfão.
       for (final regra in calendarioPni2026) {
         expect(regraPorCodigo(regra.codigo), same(regra), reason: regra.codigo);
       }
@@ -304,7 +298,6 @@ void main() {
         composicao: {ComponenteVacinal.difterico, ComponenteVacinal.tetanico},
       );
 
-      // Deixar de ser recomendada não apaga o que a dose continha.
       expect(comComponentes.composicao, hasLength(2));
     });
 
@@ -318,8 +311,6 @@ void main() {
     });
 
     test('a temporada é um identificador opaco, não uma data', () {
-      // Nada de derivar temporada de relógio ou de intervalo: o valor é
-      // constante da versão do calendário.
       expect(DateTime.tryParse(temporadaInfluenzaPni2026), isNull);
       expect(temporadaInfluenzaPni2026, isNot(contains('-')));
       expect(temporadaInfluenzaPni2026, isNot(contains('/')));
@@ -344,7 +335,6 @@ void main() {
 
       final influenza = regraPorCodigo(codigoInfluenza) as RegraDependeTemporada;
       expect(influenza.versaoCalendario, versaoCalendarioPni2026);
-      // A regra não carrega a temporada: ela é da versão, não da vacina.
       expect(influenza.dosesPorTemporada, 1);
     });
 
@@ -514,7 +504,6 @@ void main() {
     });
 
     test('regras que não se organizam por gestação não declaram dose por gestação', () {
-      // Hepatite B e dT são esquema de vida; influenza é por temporada.
       for (final codigo in [codigoHepatiteB, codigoDt, codigoInfluenza]) {
         expect(regraPorCodigo(codigo)!.dosesPorGestacao, isNull, reason: codigo);
       }

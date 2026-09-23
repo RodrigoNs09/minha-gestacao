@@ -1,4 +1,4 @@
-package com.example.suacontracao_ai
+package com.rodrigons.minhadegestacao
 
 import io.flutter.embedding.android.FlutterActivity
 

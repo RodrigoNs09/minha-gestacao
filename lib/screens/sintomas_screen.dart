@@ -200,9 +200,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
             children: [
               Container(
                 width: double.infinity,
-                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                // padding vertical, e a soma devolve a posição original
-                // do título — medida, não deduzida.
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),
@@ -235,7 +232,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 90),
                   children: [
-                    // Card de humor
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -249,10 +245,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                           Text('COMO VOCÊ ESTÁ HOJE?',
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: AppColors.textSecondary(context))),
                           const SizedBox(height: 10),
-                          // Wrap em vez de Row: os cinco rostos não cabiam
-                          // lado a lado (3,1px já em fonte normal, 218px em
-                          // 1.5). Emoji não trunca, então quebrar a linha é
-                          // a única saída que preserva as cinco opções.
                           Wrap(
                             alignment: WrapAlignment.spaceAround,
                             runSpacing: 8,
@@ -288,7 +280,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Card de sintomas
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -314,9 +305,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    // Expanded: o rótulo pedia a largura
-                                    // natural e empurrava a caixinha de
-                                    // marcação para fora com fonte grande.
                                     Expanded(
                                       child: Text(opcao.label,
                                           maxLines: 2,
@@ -349,7 +337,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Card de peso
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -412,7 +399,6 @@ class _SintomasScreenState extends State<SintomasScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Card de histórico
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

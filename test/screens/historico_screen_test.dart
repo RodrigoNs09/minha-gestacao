@@ -108,8 +108,6 @@ void main() {
     });
 
     testWidgets('não usa o global pré-populado', (tester) async {
-      // Mesmo com o global cheio, a tela carrega do storage — e aqui a
-      // leitura falha, então nada do global pode aparecer.
       listaContracoes = [contracao(id: 'c1')];
 
       await montar(tester);
@@ -241,7 +239,6 @@ void main() {
         'List<Contracao> get contracoesFiltradas',
       );
 
-      // Antes: `if (dataContracao == null) return false;` sumia com o registro.
       expect(corpo, isNot(contains('return false;')));
       expect(corpo, contains('comDataUtilizavel(_contracoes)'));
     });
@@ -256,7 +253,6 @@ void main() {
     test('a faixa aparece em qualquer filtro', () {
       final tela = fonteDaTela().replaceAll(RegExp(r'\s+'), ' ');
 
-      // semData vem de _contracoes inteiro, não de contracoesFiltradas.
       expect(tela, contains('get semData => semDataUtilizavel(_contracoes)'));
     });
 

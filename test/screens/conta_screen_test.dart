@@ -41,7 +41,6 @@ void main() {
     return codigo.substring(inicio, fim);
   }
 
-  // Só código: um comentário citando "signOut" não é uma chamada.
   List<String> arquivosDeLibQueCitam(String trecho) {
     return Directory('lib')
         .listSync(recursive: true)
@@ -231,7 +230,7 @@ void main() {
       expect(corpo, contains('if (!confirmado'));
     });
 
-    test('não oferece troca de e-mail, de senha nem exclusão de conta', () {
+    test('a tela não mexe na conta do Firebase por conta própria', () {
       final codigo = fonte();
 
       for (final fora in [

@@ -14,7 +14,6 @@ void main() {
 
   group('Localização — configuração global', () {
     test('o pubspec declara flutter_localizations pelo SDK', () {
-      // Por linhas: o arquivo é CRLF e uma busca por \n não casaria.
       final linhas = File('pubspec.yaml').readAsLinesSync();
       final indice = linhas.indexWhere(
         (l) => l.trim() == 'flutter_localizations:',
@@ -22,7 +21,6 @@ void main() {
 
       expect(indice, greaterThan(-1));
       expect(linhas[indice + 1].trim(), 'sdk: flutter');
-      // Nenhum pacote externo de localização foi adicionado.
       expect(linhas.any((l) => l.trim().startsWith('intl:')), isFalse);
     });
 
@@ -43,7 +41,6 @@ void main() {
 
       expect(codigo, contains("Locale('pt', 'BR')"));
       expect(codigo, contains('supportedLocales'));
-      // Sem locale fixo no MaterialApp: a lista de suportados já resolve.
       expect(codigo, isNot(contains("locale: const Locale('pt', 'BR')")));
     });
   });
@@ -60,8 +57,6 @@ void main() {
   });
 
   group('Localização — o resultado é realmente português', () {
-    // Prova executável: com os delegates registrados, as datas que o date
-    // picker exibe saem em pt-BR.
     late MaterialLocalizations textos;
 
     Future<void> montarComOsDelegates(WidgetTester tester) async {
@@ -96,7 +91,6 @@ void main() {
     testWidgets('a data compacta usa dd/MM/yyyy', (tester) async {
       await montarComOsDelegates(tester);
 
-      // 05/09/2026 no padrão brasileiro; 09/05/2026 seria o americano.
       expect(textos.formatCompactDate(DateTime(2026, 9, 5)), '05/09/2026');
     });
 
@@ -115,14 +109,12 @@ void main() {
         (tester) async {
       await montarComOsDelegates(tester);
 
-      // É a dica que aparece no campo de digitação do date picker.
       expect(textos.dateHelpText, 'dd/mm/aaaa');
       expect(textos.dateHelpText, isNot('mm/dd/yyyy'));
       expect(textos.dateInputLabel, isNot('Enter Date'));
     });
 
     testWidgets('sem os delegates o padrão seria inglês', (tester) async {
-      // Contraprova: é isto que a tela mostrava antes desta correção.
       late MaterialLocalizations padrao;
       await tester.pumpWidget(
         MaterialApp(

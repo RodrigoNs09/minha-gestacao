@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -8,8 +11,41 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// A assinatura de release não tem plano B. Se o key.properties faltar, o build
+// para aqui: cair na chave de debug produziria um artefato que o Google Play
+// rejeita, e a falha só apareceria no envio.
+val arquivoDeAssinatura = rootProject.file("key.properties")
+if (!arquivoDeAssinatura.exists()) {
+    throw GradleException(
+        "android/key.properties não encontrado. A assinatura de release exige " +
+            "esse arquivo e a upload keystore (android/upload-keystore.jks). " +
+            "Nenhum dos dois é versionado — gere-os localmente. " +
+            "Assinar com a chave de debug não é alternativa aceita aqui.",
+    )
+}
+
+val dadosDeAssinatura = Properties()
+FileInputStream(arquivoDeAssinatura).use { dadosDeAssinatura.load(it) }
+
+for (chave in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
+    if (dadosDeAssinatura.getProperty(chave).isNullOrBlank()) {
+        throw GradleException("android/key.properties está sem a chave '$chave'.")
+    }
+}
+
+// storeFile é resolvido a partir de android/app/, que é o diretório deste
+// script — por isso o "../" do key.properties chega em android/.
+val arquivoDaKeystore = file(dadosDeAssinatura.getProperty("storeFile"))
+if (!arquivoDaKeystore.exists()) {
+    throw GradleException(
+        "Keystore não encontrada em ${arquivoDaKeystore.absolutePath}, " +
+            "caminho vindo de storeFile no android/key.properties. " +
+            "Gere a upload keystore antes de compilar o release.",
+    )
+}
+
 android {
-    namespace = "com.example.suacontracao_ai"
+    namespace = "com.rodrigons.minhadegestacao"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,8 +59,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.suacontracao_ai"
+        applicationId = "com.rodrigons.minhadegestacao"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -33,11 +68,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = arquivoDaKeystore
+            storePassword = dadosDeAssinatura.getProperty("storePassword")
+            keyAlias = dadosDeAssinatura.getProperty("keyAlias")
+            keyPassword = dadosDeAssinatura.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

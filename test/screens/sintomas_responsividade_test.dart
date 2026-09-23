@@ -8,9 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da SintomasScreen. Sem supressor de overflow e sem
-  // clamp de fonte para baixo. Os testes de comportamento seguem em
-  // sintomas_screen_test.dart, intocados.
 
   String fonte() => File('lib/screens/sintomas_screen.dart')
       .readAsLinesSync()
@@ -58,9 +55,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 52,5 dp antes do retrofit, com a moldura fixa e o topo do
-      // cabeçalho em 20. Com a MolduraResponsiva (padding 8), o topo de 12
-      // devolve exatamente os mesmos 52,5 — medido, não estimado.
       expect(tester.getRect(find.text('Diário de hoje')).top, closeTo(52.5, 3));
     });
   });
@@ -130,8 +124,6 @@ void main() {
   });
 
   group('SintomasScreen — com conteúdo selecionado', () {
-    // A tela nasce com o seletor de humor e a lista de sintomas montados,
-    // então o estado "com conteúdo" é alcançável sem storage: basta tocar.
     testWidgets('selecionar humor e sintoma não estoura', (tester) async {
       await abrir(tester, tamanho: Telas.pequena, escalaDeTexto: 1.3);
 

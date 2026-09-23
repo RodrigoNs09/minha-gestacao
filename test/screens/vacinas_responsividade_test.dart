@@ -10,15 +10,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da VacinasScreen. Sem supressor de overflow e sem clamp
-  // de fonte para baixo. Os testes de comportamento seguem em
-  // vacinas_screen_test.dart e home_vacinas_test.dart, intocados.
-  //
-  // LIMITE DE COBERTURA: a lista de vacinas com status depende de
-  // VacinasStorage.carregarRegistros(), estático e ligado ao
-  // FirebaseFirestore.instance. Sem Firebase a leitura falha e a tela cai
-  // no painel de erro. Os dois estados alcançáveis aqui são "sem gestação"
-  // e "erro de leitura"; itens marcados/não marcados ficam sem cobertura.
 
   late GestacaoInfo gestacaoOriginal;
 
@@ -72,9 +63,6 @@ void main() {
       comGestacaoConfigurada();
       await abrir(tester, tamanho: Telas.g10);
 
-      // 52,5 dp antes do retrofit, com a moldura fixa e o topo do
-      // cabeçalho em 20. Com a MolduraResponsiva (padding 8), o topo de 12
-      // devolve exatamente os mesmos 52,5 — medido, não estimado.
       expect(
         tester.getRect(find.text('Vacinas da Gestação')).top,
         closeTo(52.5, 3),

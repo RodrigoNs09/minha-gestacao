@@ -8,13 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da ContracaoScreen — a tela mais crítica do app.
-  // Sem supressor de overflow e sem clamp de fonte para baixo.
-  // Os testes de comportamento seguem em contracao_screen_test.dart,
-  // intocados.
-  //
-  // O cronômetro é um Timer.periodic de 1s: pumpAndSettle nunca
-  // assentaria, então todo montar usa assentar: false.
 
   String fonte() => File('lib/screens/contracao_screen.dart')
       .readAsLinesSync()
@@ -35,18 +28,11 @@ void main() {
 
   Finder rolagem() => find.byType(Scrollable).first;
 
-  /// Traz [alvo] para a viewport. O corpo é um ListView, que constrói sob
-  /// demanda: em tela pequena o alvo pode nem existir na árvore ainda.
   Future<void> revelar(WidgetTester tester, Finder alvo) async {
     await tester.scrollUntilVisible(alvo, 80, scrollable: rolagem());
     await tester.pump();
   }
 
-  /// Inicia a contração pelo caminho real — tocando no botão — e avança
-  /// [segundos] no relógio, um pump por segundo, como o Timer.periodic faz.
-  ///
-  /// Depois volta ao topo, porque rolar até o botão descarta o cronômetro
-  /// da árvore em telas pequenas.
   Future<void> cronometrar(WidgetTester tester, int segundos) async {
     final botao = find.text('▶ Iniciar Contração');
     await revelar(tester, botao);
@@ -90,10 +76,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 56,5 dp antes do retrofit, com a moldura fixa, a SafeArea interna
-      // e o topo do cabeçalho em 20. Sem a SafeArea interna e com a
-      // MolduraResponsiva (padding 8), o topo de 12 devolve exatamente os
-      // mesmos 56,5 — medido, não estimado.
       expect(
         tester.getRect(find.text('Registrar Contração')).top,
         closeTo(56.5, 3),
@@ -194,7 +176,6 @@ void main() {
         await abrir(tester, tamanho: Telas.pequena, escalaDeTexto: escala);
         await cronometrar(tester, 100 * 60);
 
-        // Seis caracteres: é aqui que o texto de 48px ganha largura.
         expect(find.text('100:00'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
@@ -203,8 +184,6 @@ void main() {
 
   group('ContracaoScreen — teclado', () {
     Future<void> focarObservacoes(WidgetTester tester) async {
-      // O campo fica no fim da lista: em tela pequena e em paisagem ele
-      // só passa a existir depois de rolar até lá.
       await revelar(tester, find.byType(TextField));
 
       final campo = find.byType(TextField);
@@ -285,10 +264,6 @@ void main() {
     });
 
     test('a barra decorativa não voltou', () {
-      // Eram quatro Icon puros, sem onTap, e dois deles apontavam para
-      // features removidas: auto_graph para a AnaliseScreen (código morto)
-      // e chat_bubble para o Assistente de IA (descontinuado). O "Voltar"
-      // do cabeçalho é quem faz a navegação de volta.
       final codigo = fonte();
 
       expect(codigo, isNot(contains('navBar')));
@@ -364,15 +339,10 @@ void main() {
     });
 
     test('a SafeArea interna foi removida', () {
-      // Ela ficava dentro do Container, depois do clipBehavior: não
-      // protegia das barras do sistema, só somava padding. Quem protege
-      // agora é a SafeArea da MolduraResponsiva, por fora do cartão.
       expect(fonte(), isNot(contains('SafeArea')));
     });
 
     test('o Scaffold continua encolhendo com o teclado', () {
-      // A tela tem TextField: encolher é o que permite ao scroll trazer
-      // o campo para cima do teclado.
       expect(fonte(), isNot(contains('resizeToAvoidBottomInset: false')));
     });
 

@@ -295,7 +295,6 @@ void main() {
     });
 
     test('mês e dia impossíveis são rejeitados, não rolados', () {
-      // DateTime(2026, 13, 45) viraria 2027-02-14 em silêncio.
       expect(com('2026-13-45', '14:30').dataHora, isNull);
       expect(com('2026-02-30', '14:30').dataHora, isNull);
       expect(com('2027-02-29', '14:30').dataHora, isNull);

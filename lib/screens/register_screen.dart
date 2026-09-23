@@ -66,7 +66,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Cadastro deu certo — navega direto, sem depender só do StreamBuilder
     final jaConfigurou = await GestacaoStorage.restaurarDUM();
     if (!mounted) return;
 
@@ -82,8 +81,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      // O Scaffold continua encolhendo com o teclado de propósito: é isso que
-      // deixa o SingleChildScrollView trazer os campos para cima dele.
       body: MolduraResponsiva(
         child: Center(
             child: SingleChildScrollView(

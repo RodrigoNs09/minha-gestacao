@@ -8,15 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da HistoricoScreen. Sem supressor de overflow e sem
-  // clamp de fonte para baixo. Os testes de comportamento seguem em
-  // historico_screen_test.dart, intocados.
-  //
-  // LIMITE DE COBERTURA: a tela carrega de ContracoesStorage, que é
-  // estático e vai direto ao FirebaseFirestore.instance. Sem Firebase a
-  // leitura falha e a tela cai no painel de erro — é o único estado
-  // alcançável aqui. Lista vazia e lista populada exigiriam uma costura
-  // de injeção que não existe, e criá-la seria mexer em lógica.
 
   String fonte() => File('lib/screens/historico_screen.dart')
       .readAsLinesSync()
@@ -53,9 +44,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 52,5 dp antes do retrofit, com a moldura fixa e o topo do
-      // cabeçalho em 20. Com a MolduraResponsiva (padding 8), o topo de 12
-      // devolve exatamente os mesmos 52,5 — medido, não estimado.
       expect(tester.getRect(find.text('Histórico')).top, closeTo(52.5, 3));
     });
   });
@@ -190,10 +178,6 @@ void main() {
     });
 
     test('a barra decorativa não voltou', () {
-      // Eram quatro Icon puros, sem onTap, e dois deles apontavam para
-      // features removidas: auto_graph para a AnaliseScreen (código morto)
-      // e chat_bubble para o Assistente de IA (descontinuado). O "Voltar"
-      // do cabeçalho é quem faz a navegação de volta.
       final codigo = fonte();
 
       expect(codigo, isNot(contains('navBar')));

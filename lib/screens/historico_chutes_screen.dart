@@ -178,9 +178,6 @@ class _HistoricoChutesScreenState extends State<HistoricoChutesScreen> {
             children: [
               Container(
                 width: double.infinity,
-                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                // padding vertical, e a soma devolve a posição original
-                // do título — medida, não deduzida.
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),

@@ -7,21 +7,12 @@ import 'package:suacontracao_ai/widgets/editar_dum_dialog.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da folha "Editar progresso da gestação".
-  // Sem supressor de overflow e sem clamp de fonte para baixo.
-  // Os testes de comportamento seguem em editar_dum_dialog_test.dart,
-  // intocados.
-  //
-  // Não é uma tela: é um showModalBottomSheet, então NÃO usa a
-  // MolduraResponsiva — a folha tem moldura própria, dada pelo Material.
 
   String fonte() => File('lib/widgets/editar_dum_dialog.dart')
       .readAsLinesSync()
       .where((linha) => !linha.trimLeft().startsWith('//'))
       .join('\n');
 
-  /// Abre a folha pelo caminho real: um botão que chama mostrarEditarDUM,
-  /// como a Home faz nos dois pontos em que a oferece.
   Future<void> abrirFolha(
     WidgetTester tester, {
     Size tamanho = Telas.comum,
@@ -113,9 +104,6 @@ void main() {
   });
 
   group('EditarDUM — teclado', () {
-    // A folha não tem campo de texto — a data vem de um showDatePicker —
-    // mas o recuo do teclado pode chegar até ela por outros caminhos, e é
-    // ele que antes empurrava o conteúdo para fora.
     testWidgets('não estoura com o recuo do teclado em retrato', (
       tester,
     ) async {

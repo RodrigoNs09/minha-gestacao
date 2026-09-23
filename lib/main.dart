@@ -64,7 +64,7 @@ class MinhaGestacaoApp extends StatelessWidget {
               if (!snapshot.hasData) {
                 return const LoginScreen();
               }
-              
+
               return const _RestaurarDumGate();
             },
           ),
@@ -218,7 +218,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _isDark => themeNotifier.value == ThemeMode.dark;
 
-  // Contrações de hoje, ordenadas cronologicamente (mais antiga → mais recente)
   List<Contracao> get _contracoesDeHoje {
     final agora = DateTime.now();
     final hoje = '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
@@ -373,9 +372,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
-            // Sem o Expanded os dois textos pediam a largura natural e
-            // estouravam à direita assim que o cartão deixou de ter 360dp
-            // fixos — 176px numa tela de 360dp, e mais com fonte ampliada.
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,20 +585,12 @@ class _HomeScreenState extends State<HomeScreen> {
           body: MolduraResponsiva(
             child: Column(
                 children: [
-                  // O cabeçalho entrou na rolagem: fixo, ele mais o bottomNav
-                  // não cabiam quando a altura apertava (149px de estouro em
-                  // paisagem com fonte 1.5). O ListView perdeu o padding
-                  // lateral para o cabeçalho continuar colado nas bordas do
-                  // cartão; o resto do corpo recebe esse recuo por dentro.
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.only(bottom: 100),
                       children: [
                   Container(
                     width: double.infinity,
-                    // O topo era 48 para compensar a barra de status à mão.
-                    // A SafeArea da MolduraResponsiva faz isso de forma
-                    // adaptativa, então aqui fica o mesmo 28 do rodapé.
                     padding: const EdgeInsets.fromLTRB(24, 40, 24, 28),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant(context),
@@ -612,12 +600,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Row(
                           children: [
-                            // Expanded no lugar do par Row+Spacer: com o
-                            // cartão acompanhando a largura da tela, em
-                            // 360dp sobravam 287 para um conteúdo de 318 e
-                            // o cabeçalho estourava 31px. O Expanded já
-                            // empurra os botões para a direita, então o
-                            // Spacer sairia sobrando e brigaria pelo espaço.
                             Expanded(
                               child: Row(
                                 children: [
@@ -720,8 +702,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
                     child: Column(
-                      // stretch reproduz a largura cheia que os itens já
-                      // tinham como filhos diretos do ListView.
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(

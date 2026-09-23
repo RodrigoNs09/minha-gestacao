@@ -6,7 +6,7 @@ class ChuteSessao {
   final String horaInicio;
   final String horaFim;
   final int totalChutes;
-  final bool completa; // true se atingiu a meta de chutes
+  final bool completa;
 
   ChuteSessao({
     this.id,

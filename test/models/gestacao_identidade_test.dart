@@ -83,7 +83,6 @@ void main() {
         fonte(),
         contains('final id = gestacaoAtual.id ?? novoGestacaoId();'),
       );
-      // Uma chamada seguinte encontra o id definido por definirGestacao.
       expect(fonte(), contains('definirGestacao(data, id);'));
     });
 

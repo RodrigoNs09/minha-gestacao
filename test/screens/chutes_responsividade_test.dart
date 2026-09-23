@@ -8,12 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da ChutesScreen. Sem supressor de overflow e sem clamp
-  // de fonte para baixo. Os testes de comportamento seguem em
-  // chutes_screen_test.dart, intocados.
-  //
-  // O pulso do contador é um AnimationController com repeat(reverse: true):
-  // pumpAndSettle nunca assentaria, por isso todo montar usa assentar:false.
 
   String fonte() => File('lib/screens/chutes_screen.dart')
       .readAsLinesSync()
@@ -61,9 +55,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 52,5 dp antes do retrofit, com a moldura fixa e o topo do
-      // cabeçalho em 20. Com a MolduraResponsiva (padding 8), o topo de 12
-      // devolve exatamente os mesmos 52,5 — medido, não estimado.
       expect(
         tester.getRect(find.text('Contador de Chutes')).top,
         closeTo(52.5, 3),
@@ -136,8 +127,6 @@ void main() {
   });
 
   group('ChutesScreen — contador em uso', () {
-    // A sessão começa zerada; tocar no contador é o estado "com conteúdo"
-    // alcançável sem storage.
     testWidgets('registrar chutes não estoura em tela pequena', (tester) async {
       await abrir(tester, tamanho: Telas.pequena, escalaDeTexto: 1.3);
 

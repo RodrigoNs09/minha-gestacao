@@ -87,7 +87,6 @@ void main() {
     });
 
     test('segundos fora da faixa (>= 60) são rejeitados', () {
-      // Preferimos "desconhecido" a converter um valor incoerente.
       expect(Contracao.duracaoSegundosDe('Duração: 01:75'), isNull);
       expect(Contracao.duracaoSegundosDe('Duração: 01:99'), isNull);
     });
@@ -258,8 +257,6 @@ void main() {
       final hoje =
           '${agora.year}-${agora.month.toString().padLeft(2, '0')}-${agora.day.toString().padLeft(2, '0')}';
 
-      // Atribuir o dia de hoje a um documento sem data deslocaria a
-      // contração para a data errada, em silêncio.
       expect(c.data, '');
       expect(c.data, isNot(hoje));
     });

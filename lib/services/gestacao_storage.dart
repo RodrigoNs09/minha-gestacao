@@ -14,6 +14,9 @@ class GestacaoStorage {
     return FirebaseFirestore.instance.collection('usuarios').doc(uid);
   }
 
+  static DocumentReference<Map<String, dynamic>>? get documentoDoUsuario =>
+      _documento;
+
   static String novoGestacaoId() =>
       FirebaseFirestore.instance.collection('usuarios').doc().id;
 
@@ -25,7 +28,7 @@ class GestacaoStorage {
 
     await doc.set(
       {_campo: data.toIso8601String(), _campoId: id},
-      SetOptions(merge: true), 
+      SetOptions(merge: true),
     );
 
     definirGestacao(data, id);

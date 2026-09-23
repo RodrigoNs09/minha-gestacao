@@ -8,13 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da HistoricoChutesScreen. Sem supressor de overflow e
-  // sem clamp de fonte para baixo.
-  //
-  // LIMITE DE COBERTURA: a tela carrega de ChutesStorage, estático e ligado
-  // ao FirebaseFirestore.instance. Sem Firebase a leitura falha, _sessoes
-  // fica vazia e a tela cai no estado vazio — é ele que se testa aqui.
-  // Lista populada exigiria uma costura de injeção que não existe.
 
   String fonte() => File('lib/screens/historico_chutes_screen.dart')
       .readAsLinesSync()
@@ -50,9 +43,6 @@ void main() {
     testWidgets('o título não se moveu com o retrofit', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 52,5 dp antes do retrofit, com a moldura fixa e o topo do
-      // cabeçalho em 20. Com a MolduraResponsiva (padding 8), o topo de 12
-      // devolve exatamente os mesmos 52,5 — medido, não estimado.
       expect(
         tester.getRect(find.text('Histórico de Chutes')).top,
         closeTo(52.5, 3),

@@ -95,7 +95,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // Continua no onboarding.
       expect(find.text('Sei quantas semanas estou'), findsOneWidget);
       expect(find.textContaining('Tente novamente'), findsOneWidget);
     });
@@ -107,7 +106,6 @@ void main() {
       await tester.tap(find.text('Continuar'));
       await tester.pumpAndSettle();
 
-      // Sem estado fantasma: a memória só muda depois da persistência.
       expect(gestacaoAtual.configurada, isFalse);
       expect(gestacaoAtual.id, isNull);
     });

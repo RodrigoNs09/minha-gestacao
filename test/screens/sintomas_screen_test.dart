@@ -36,22 +36,18 @@ void main() {
   String diasAtras(int dias) =>
       comoData(DateTime.now().subtract(Duration(days: dias)));
 
-  // Datas fixas, para os testes puros em que "hoje" não participa.
   List<RegistroSintomas> tresDias() => [
     RegistroSintomas(data: '2026-09-06', humor: 0, sintomas: const ['nausea']),
     RegistroSintomas(data: '2026-09-07', humor: 1, peso: 68.0),
     RegistroSintomas(data: '2026-09-08', humor: 2, sintomas: const ['azia']),
   ];
 
-  // Nos testes de tela o registro do dia é escrito de verdade, então a
-  // fixture precisa ser sempre passado — datas fixas viram "hoje" um dia.
   List<RegistroSintomas> tresDiasAnteriores() => [
     RegistroSintomas(data: diasAtras(3), humor: 0, sintomas: const ['nausea']),
     RegistroSintomas(data: diasAtras(2), humor: 1, peso: 68.0),
     RegistroSintomas(data: diasAtras(1), humor: 2, sintomas: const ['azia']),
   ];
 
-  // Como a seção HISTÓRICO rotula cada linha: dd/MM.
   String rotuloDe(String dataIso) {
     final partes = dataIso.split('-');
     return '${partes[2]}/${partes[1]}';
@@ -183,7 +179,6 @@ void main() {
         RegistroSintomas(data: '2026-09-08', humor: 4),
       );
 
-      // Mesmas instâncias: não foram recriadas nem regravadas.
       expect(identical(resultado[0], seis), isTrue);
       expect(identical(resultado[1], sete), isTrue);
       expect(resultado[0].sintomas, ['nausea']);
@@ -455,7 +450,6 @@ void main() {
       await montar(tester);
 
       expect(find.text('69.0 kg'), findsOneWidget);
-      // O rótulo também existe no seletor de sintomas, acima.
       expect(find.text('Dor nas costas'), findsNWidgets(2));
       expect(
         find.text('Seus registros anteriores vão aparecer aqui.'),
@@ -550,7 +544,6 @@ void main() {
       for (final antigo in tresDiasAnteriores()) {
         expect(antigo.data, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
       }
-      // Ordenação por string só funciona porque o formato é fixo e zero-padded.
       expect(hoje().compareTo(diasAtras(1)), greaterThan(0));
     });
   });

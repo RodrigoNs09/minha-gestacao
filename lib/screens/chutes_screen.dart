@@ -81,8 +81,6 @@ class _ChutesScreenState extends State<ChutesScreen>
   bool _salvando = false;
   String? _idSessaoPendente;
 
-  /// A meta foi atingida mas a sessão ainda não está no servidor. Enquanto
-  /// isso for verdade o botão oferece nova tentativa em vez de ficar morto.
   bool _conclusaoPendente = false;
 
   late AnimationController _pulseController;
@@ -273,7 +271,6 @@ class _ChutesScreenState extends State<ChutesScreen>
 
     setState(() => listaChutes = comSessao(listaChutes, gravada!));
 
-    // Pequeno delay pra usuária ver a meta atingida antes de resetar
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
@@ -297,7 +294,6 @@ class _ChutesScreenState extends State<ChutesScreen>
 
       _idSessaoPendente ??= ChutesStorage.novoId();
 
-      // Salva o progresso a cada chute, para não perder se sair da tela
       gravou = await ChutesStorage.salvarProgressoAtual(
         ProgressoDeChutes(
           chutes: _chutesAtuais,
@@ -354,8 +350,6 @@ class _ChutesScreenState extends State<ChutesScreen>
   @override
   Widget build(BuildContext context) {
     final metaAtingida = _chutesAtuais >= _metaChutes;
-    // Enquanto a sessão não está no servidor o botão não pode se anunciar
-    // como concluído: fica roxo, oferecendo nova tentativa.
     final corDoBotao = (metaAtingida && !_conclusaoPendente)
         ? const Color(0xFF1D9E75)
         : AppTheme.primaryPurple;
@@ -367,9 +361,6 @@ class _ChutesScreenState extends State<ChutesScreen>
             children: [
               Container(
                 width: double.infinity,
-                // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                // padding vertical, e a soma devolve a posição original
-                // do título — medida, não deduzida.
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant(context),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/sessao.dart';
 import '../services/auth_service.dart';
+import '../services/exclusao_de_conta.dart';
 import '../services/firestore_error.dart';
 import '../theme/app_theme.dart';
 import '../widgets/moldura_responsiva.dart';
@@ -16,8 +17,19 @@ class ContaScreen extends StatefulWidget {
 
 class _ContaScreenState extends State<ContaScreen> {
   bool _saindo = false;
+  bool _excluindo = false;
   String? _erro;
   String? _email;
+
+  bool get _ocupado => _saindo || _excluindo;
+
+  final TextEditingController _senha = TextEditingController();
+
+  @override
+  void dispose() {
+    _senha.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -83,7 +95,7 @@ class _ContaScreenState extends State<ContaScreen> {
   }
 
   Future<void> _sairDaConta() async {
-    if (_saindo) return;
+    if (_ocupado) return;
 
     final confirmado = await _confirmarSaida(context);
     if (!confirmado || !mounted) return;
@@ -108,6 +120,193 @@ class _ContaScreenState extends State<ContaScreen> {
     }
 
     if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<bool> _confirmarExclusao(BuildContext context) async {
+    final resposta = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          scrollable: true,
+          backgroundColor: AppColors.surface(ctx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Excluir minha conta?',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(ctx),
+            ),
+          ),
+          content: Text(
+            'Isto apaga de vez suas contrações, seus chutes, seus sintomas, '
+            'suas consultas, suas vacinas, a data da última menstruação e o '
+            'seu login. A exclusão é permanente: não há como desfazer nem '
+            'recuperar depois.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.textSecondary(ctx),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textPrimary(ctx)),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Excluir',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.pink,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return resposta == true;
+  }
+
+  Future<String?> _pedirSenha(BuildContext context) async {
+    _senha.clear();
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          scrollable: true,
+          backgroundColor: AppColors.surface(ctx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Confirme sua senha',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(ctx),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Digite a senha da sua conta para confirmar que é você.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AppColors.textSecondary(ctx),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _senha,
+                obscureText: true,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (valor) => Navigator.pop(ctx, valor),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textPrimary(ctx),
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Senha',
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted(ctx),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textPrimary(ctx)),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _senha.text),
+              child: Text(
+                'Excluir conta',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.pink,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _excluirConta() async {
+    if (_ocupado) return;
+
+    final confirmado = await _confirmarExclusao(context);
+    if (!confirmado || !mounted) return;
+
+    final senha = await _pedirSenha(context);
+    if (senha == null || !mounted) return;
+
+    if (senha.isEmpty) {
+      setState(() => _erro = 'Digite sua senha para confirmar a exclusão.');
+      return;
+    }
+
+    setState(() {
+      _excluindo = true;
+      _erro = null;
+    });
+
+    ResultadoDaExclusao resultado;
+    try {
+      resultado = await ExclusaoDeConta.executar(senha: senha);
+    } catch (erro) {
+      resultado = ResultadoDaExclusao.falha(
+        FirestoreErro.mensagemAmigavel(erro),
+      );
+    }
+
+    if (!mounted) return;
+
+    _senha.clear();
+
+    if (!resultado.sucesso) {
+      setState(() {
+        _excluindo = false;
+        _erro = resultado.erro;
+      });
+      return;
+    }
+
+    limparEstadoDaSessao();
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -211,7 +410,7 @@ class _ContaScreenState extends State<ContaScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _saindo ? null : _sairDaConta,
+        onPressed: _ocupado ? null : _sairDaConta,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.primaryPurple,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -232,6 +431,39 @@ class _ContaScreenState extends State<ContaScreen> {
                 'Sair da conta',
                 style: TextStyle(
                   color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _botaoExcluir(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: _ocupado ? null : _excluirConta,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppTheme.pink, width: 1),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: _excluindo
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  color: AppTheme.pink,
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                'Excluir minha conta',
+                style: TextStyle(
+                  color: AppTheme.pink,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -278,6 +510,24 @@ class _ContaScreenState extends State<ContaScreen> {
                     Text(
                       'Sair não apaga nada: seus dados ficam guardados na '
                       'sua conta.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: AppColors.textMuted(context),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Divider(
+                      color: AppColors.border(context),
+                      height: 1,
+                      thickness: 0.5,
+                    ),
+                    const SizedBox(height: 20),
+                    _botaoExcluir(context),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Excluir apaga de vez seus registros e o seu login. '
+                      'É permanente e não dá para desfazer.',
                       style: TextStyle(
                         fontSize: 11,
                         height: 1.35,

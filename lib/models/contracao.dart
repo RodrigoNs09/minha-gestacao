@@ -8,7 +8,7 @@ class Contracao {
   final String data;
   final String inicio;
   final String fim;
-  final String intensidade; // Leve | Moderada | Forte
+  final String intensidade;
   final String observacoes;
 
   final int? duracaoSegundos;
@@ -135,7 +135,6 @@ class Contracao {
     return mapa;
   }
 
-  // todo o histórico.
   factory Contracao.fromMap(Map<String, dynamic> map, {String? id}) {
     return Contracao(
       id: id,

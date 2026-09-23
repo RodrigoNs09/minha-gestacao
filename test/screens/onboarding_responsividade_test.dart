@@ -8,9 +8,6 @@ import 'package:suacontracao_ai/widgets/moldura_responsiva.dart';
 import '../support/responsivo.dart';
 
 void main() {
-  // Responsividade da OnboardingScreen. Sem supressor de overflow e sem
-  // clamp de fonte para baixo. Os testes de comportamento seguem em
-  // onboarding_screen_test.dart, intocados.
 
   String fonte() => File('lib/screens/onboarding_screen.dart')
       .readAsLinesSync()
@@ -58,11 +55,6 @@ void main() {
     testWidgets('o cartão preenche a altura disponível', (tester) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // Sem o Center, o SingleChildScrollView se dimensionava pelo
-      // conteúdo e o cartão encolhia para 692 dp — seria o único
-      // flutuante do app. Com Center ele preenche a altura, como em
-      // todas as outras telas: 835 da tela menos os 16 de padding
-      // vertical da MolduraResponsiva.
       expect(cartao(tester).height, closeTo(835 - 16, 1));
     });
 
@@ -71,9 +63,6 @@ void main() {
     ) async {
       await abrir(tester, tamanho: Telas.g10);
 
-      // 178,0 dp era a posição antiga, artefato do minHeight: 760 que
-      // deixava o cartão mais alto que o conteúdo. Com o conteúdo
-      // centralizado o título assenta em 212,0 — medido, não estimado.
       expect(
         tester.getRect(find.text('Bem-vinda ao\nMinha Gestação')).top,
         closeTo(212, 3),

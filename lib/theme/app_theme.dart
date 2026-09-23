@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// Notifier global — controla o tema em todo o app
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 class AppTheme {
@@ -35,7 +34,6 @@ class AppColors {
   static bool isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
 
-  // Backgrounds
   static Color scaffold(BuildContext context) =>
       isDark(context) ? const Color(0xFF13112A) : const Color(0xFFF0EEFF);
 
@@ -45,7 +43,6 @@ class AppColors {
   static Color surfaceVariant(BuildContext context) =>
       isDark(context) ? const Color(0xFF2A2740) : const Color(0xFFFDF6FF);
 
-  // Texto
   static Color textPrimary(BuildContext context) =>
       isDark(context) ? const Color(0xFFF0EBF8) : const Color(0xFF26215C);
 
@@ -55,14 +52,12 @@ class AppColors {
   static Color textMuted(BuildContext context) =>
       isDark(context) ? const Color(0xFF6B6485) : const Color(0xFFB4B2A9);
 
-  // Accent
   static Color accent(BuildContext context) =>
       isDark(context) ? const Color(0xFFB9AADD) : const Color(0xFF534AB7);
 
   static Color accentText(BuildContext context) =>
       isDark(context) ? const Color(0xFFD4CAFF) : const Color(0xFF3C3489);
 
-  // Stat cards
   static Color statPurple(BuildContext context) =>
       isDark(context) ? const Color(0xFF2A2740) : const Color(0xFFEEEDFE);
 
@@ -75,7 +70,6 @@ class AppColors {
   static Color statOrange(BuildContext context) =>
       isDark(context) ? const Color(0xFF2E2318) : const Color(0xFFFAEEDA);
 
-  // Bordas
   static Color border(BuildContext context) =>
       isDark(context)
           ? const Color(0xFF2A2740)
@@ -86,11 +80,9 @@ class AppColors {
           ? const Color(0xFF3A3660)
           : const Color.fromRGBO(0, 0, 0, 0.08);
 
-  // Nav bar
   static Color navBar(BuildContext context) =>
       isDark(context) ? const Color(0xFF1C1B2E) : Colors.white;
 
-  // Texto de label roxo
   static Color purpleLabel(BuildContext context) =>
       isDark(context) ? const Color(0xFF9B8ECC) : const Color(0xFF7F77DD);
 }

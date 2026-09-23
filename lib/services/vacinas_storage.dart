@@ -14,6 +14,9 @@ class VacinasStorage {
         .collection('vacinas');
   }
 
+  static CollectionReference<Map<String, dynamic>>? get colecaoDoUsuario =>
+      _colecao;
+
   static String? novoId() => _colecao?.doc().id;
 
   static Future<List<RegistroVacinacao>> carregarRegistros() async {
@@ -30,8 +33,6 @@ class VacinasStorage {
     final colecao = _colecao;
     if (colecao == null) return null;
 
-    // Reaproveita o id recebido: um retry sobrescreve o mesmo documento em
-    // vez de virar mais uma dose no histórico.
     final id = registro.id ?? colecao.doc().id;
     final salvo = registro.comId(id);
     await colecao.doc(id).set(salvo.toMap());

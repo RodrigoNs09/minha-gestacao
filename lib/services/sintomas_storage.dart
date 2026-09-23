@@ -14,6 +14,9 @@ class SintomasStorage {
         .collection('sintomas');
   }
 
+  static CollectionReference<Map<String, dynamic>>? get colecaoDoUsuario =>
+      _colecao;
+
   static bool dataEhEnderecavel(String data) =>
       data.isNotEmpty && !data.contains('/');
 
@@ -40,7 +43,6 @@ class SintomasStorage {
     return true;
   }
 
-  /// Remove só o documento daquele dia.
   static Future<bool> removerRegistro(String data) async {
     final doc = _documento(data);
     if (doc == null) return false;

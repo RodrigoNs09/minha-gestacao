@@ -1,7 +1,7 @@
 import '../services/vacinas_engine.dart' show diasDeCalendarioEntre;
 
 class GestacaoInfo {
-  final DateTime dum; // Data da Última Menstruação
+  final DateTime dum;
 
   final String? id;
 

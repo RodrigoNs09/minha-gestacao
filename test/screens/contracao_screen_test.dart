@@ -32,15 +32,11 @@ void main() {
     addTearDown(() => FlutterError.onError = anterior);
   }
 
-  // O cronômetro é um Timer.periodic: pumpAndSettle nunca assentaria.
   Future<void> assentar(WidgetTester tester) async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  // A transição de saída do AlertDialog é mais longa que os 50 ms de
-  // assentar. O cronômetro já está parado aqui, então pumpar mais não conta
-  // segundos a mais.
   Future<void> fecharDialogo(WidgetTester tester) async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -132,7 +128,6 @@ void main() {
       await tester.tap(find.text('Contração em andamento...'));
       await tester.pump(const Duration(seconds: 1));
 
-      // Um único timer: se dois estivessem correndo, saltaria para 00:05.
       expect(find.text('00:03'), findsOneWidget);
     });
   });
@@ -309,7 +304,6 @@ void main() {
 
       await iniciarEContar(tester, 2);
       await tester.tap(find.text('■ Parar e Salvar'));
-      // Desmonta no meio da gravação.
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pump(const Duration(seconds: 3));
 

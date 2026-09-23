@@ -139,7 +139,7 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
       return;
     }
 
-    if (_salvando) return; 
+    if (_salvando) return;
 
     _timer?.cancel();
 
@@ -258,18 +258,9 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold(context),
-      // A SafeArea que havia aqui ficava DENTRO do cartão, depois do
-      // clipBehavior: não protegia das barras do sistema, só somava
-      // padding interno. Quem protege agora é a da MolduraResponsiva,
-      // por fora do cartão.
       body: MolduraResponsiva(
         child: Column(
               children: [
-                // O cabeçalho entrou na rolagem porque, fixo, não cabia em
-                // paisagem com o teclado aberto (86px de estouro). O
-                // ListView perdeu o padding lateral para o cabeçalho seguir
-                // colado nas bordas do cartão; o resto do corpo recebe esse
-                // recuo por dentro.
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -279,8 +270,6 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                       children: [
                 Container(
                   width: double.infinity,
-                  // Topo 12 em vez de 20: a MolduraResponsiva já traz 8 de
-                  // padding vertical.
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
@@ -336,8 +325,6 @@ class _ContracaoScreenState extends State<ContracaoScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                   child: Column(
-                    // stretch reproduz a largura cheia que os itens já
-                    // tinham como filhos diretos do ListView.
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                         Container(

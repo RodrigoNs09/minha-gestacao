@@ -22,9 +22,6 @@ void main() {
     return codigo.substring(inicio, fim);
   }
 
-  // Sem supressor de overflow e sem reduzir a escala de texto: o layout
-  // precisa caber de verdade. Qualquer RenderFlex que estoure aqui reprova
-  // o teste, que é o comportamento desejado.
   Future<void> montar(
     WidgetTester tester, {
     Size tamanho = const Size(360, 800),
@@ -48,7 +45,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  // O teclado sobe depois da tela montada, que é a ordem real.
   Future<void> abrirTeclado(
     WidgetTester tester, {
     double altura = 322,
@@ -155,7 +151,6 @@ void main() {
       final corpo = corpoDoMetodo('Future<void> _abrirRecuperacao(');
 
       expect(corpo, contains('AuthService.recuperarSenha(email: email)'));
-      // O aviso é uma constante única: não há ramo alternativo por conta.
       expect(corpo, contains('_avisoNeutroDeRecuperacao'));
       expect(
         '_avisoNeutroDeRecuperacao'.allMatches(fonte()).length,
@@ -196,7 +191,6 @@ void main() {
   });
 
   group('LoginScreen — responsividade', () {
-    // Os elementos que precisam sobreviver a qualquer cenário.
     void esperarFormularioInteiro() {
       expect(find.text('Minha Gestação'), findsOneWidget);
       expect(find.text('Entre na sua conta'), findsOneWidget);
@@ -225,7 +219,6 @@ void main() {
       await montar(tester, tamanho: const Size(800, 360));
 
       expect(tester.takeException(), isNull);
-      // Em paisagem o formulário rola; tudo precisa ser alcançável.
       await tester.ensureVisible(find.text('Não tem conta? Criar agora'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -304,7 +297,6 @@ void main() {
         ).first,
       );
 
-      // 360 da tela menos 24 de padding lateral.
       expect(cartao.width, closeTo(336, 1));
     });
 
@@ -353,7 +345,6 @@ void main() {
     testWidgets('a tela usa mesmo o widget compartilhado', (tester) async {
       await montar(tester);
 
-      // Não basta o código citar o nome: o widget precisa estar na árvore.
       expect(find.byType(MolduraResponsiva), findsOneWidget);
     });
 
@@ -365,16 +356,12 @@ void main() {
     });
 
     test('o Scaffold continua encolhendo com o teclado', () {
-      // Ao contrário da Agenda, aqui os campos estão na própria tela:
-      // encolher é o que permite ao scroll trazê-los para cima do teclado.
       final corpo = corpoDoMetodo('Widget build(BuildContext context)');
 
       expect(corpo, isNot(contains('resizeToAvoidBottomInset: false')));
     });
 
     test('nenhum supressor de overflow na tela nem no teste', () {
-      // As agulhas são montadas por concatenação: como literais inteiros,
-      // elas casariam com esta própria asserção.
       final agulhas = ['ignorarOverflow' 'DeLayout', 'FlutterError.' 'onError'];
 
       final esteTeste = File(

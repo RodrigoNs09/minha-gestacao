@@ -58,9 +58,6 @@ void main() {
     hora: 'xx',
   );
 
-  // Sem supressor de overflow e sem reduzir a escala de texto: o layout
-  // precisa caber de verdade. Qualquer RenderFlex que estoure aqui faz o
-  // teste falhar, que é o comportamento desejado.
   Future<void> montar(
     WidgetTester tester, {
     Size tamanho = const Size(360, 800),
@@ -84,9 +81,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  // O teclado sobe DEPOIS que a folha já está aberta, que é a ordem real.
-  // Aplicar o inset antes encolheria o Scaffold de trás e o "+ Nova" nem
-  // chegaria a existir na tela.
   Future<void> abrirTeclado(
     WidgetTester tester, {
     double altura = 230,
@@ -150,7 +144,6 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(listaConsultas, isEmpty);
-      // O formulário continua aberto.
       expect(find.text('Nova consulta'), findsOneWidget);
     });
 
@@ -423,8 +416,6 @@ void main() {
     test('só remove da memória depois do sucesso', () {
       final tela = fonteDaTela();
 
-      // O onDismissed só roda quando confirmDismiss devolveu true, e
-      // _confirmarEExcluir só devolve true depois do remover bem-sucedido.
       expect(tela, contains('confirmDismiss: (_) => _confirmarEExcluir(c)'));
       expect(
         corpoDoMetodo(tela, 'Future<bool> _confirmarEExcluir('),
@@ -658,8 +649,6 @@ void main() {
   });
 
   group('Responsividade — sem moldura fixa', () {
-    // Nenhum teste deste grupo suprime overflow. Se o layout estourar, o
-    // FlutterError vira exceção e o teste falha — que é o objetivo.
 
     testWidgets('cabe numa tela pequena', (tester) async {
       await montar(tester, tamanho: const Size(320, 640));
@@ -689,7 +678,6 @@ void main() {
     ) async {
       await montar(tester, tamanho: const Size(320, 640));
 
-      // Sem warnIfMissed: um hit-test que erra o alvo faz o teste falhar.
       await tester.tap(find.text('+ Nova'));
       await tester.pumpAndSettle();
 
@@ -724,8 +712,6 @@ void main() {
     ) async {
       await montar(tester, tamanho: const Size(360, 800));
 
-      // 360 menos os 12 de padding de cada lado; o 1 de tolerância é a
-      // borda de 0,5 px do cartão. Antes era fixo em 300.
       final largura = tester.getSize(find.byType(ListView)).width;
 
       expect(largura, closeTo(336, 1));
@@ -747,9 +733,6 @@ void main() {
       expect(corpo, isNot(contains('width: 300')));
       expect(corpo, isNot(contains('minHeight: 620')));
 
-      // A moldura agora vem do widget compartilhado. Exigir aqui o
-      // SafeArea/ConstrainedBox voltaria a permitir que a tela reimplemente
-      // a estrutura por conta própria, que é o que se quer impedir.
       expect(corpo, contains('MolduraResponsiva('));
       expect(corpo, isNot(contains('BoxConstraints(maxWidth:')));
       expect(corpo, isNot(contains('BorderRadius.circular(36)')));
@@ -758,7 +741,6 @@ void main() {
     testWidgets('a tela usa mesmo o widget compartilhado', (tester) async {
       await montar(tester);
 
-      // Não basta o código citar o nome: o widget precisa estar na árvore.
       expect(find.byType(MolduraResponsiva), findsOneWidget);
     });
 
@@ -777,9 +759,6 @@ void main() {
     });
   });
 
-  // O ponto cego que a validação no Motorola G10 revelou: até aqui nenhum
-  // teste de responsividade tinha consulta na lista, então _consultaCard
-  // nunca era construído e o badge de data nunca era exercitado.
   group('Responsividade — com consulta renderizada', () {
     final umaQuinta = DateTime(2026, 10, 15);
 
@@ -804,11 +783,8 @@ void main() {
       testWidgets('o badge da data cabe com fonte $escala', (tester) async {
         await montar(tester, escalaDeTexto: escala);
 
-        // Um RenderFlex estourado vira exceção e reprova o teste sozinho;
-        // a checagem explícita deixa a intenção clara.
         expect(tester.takeException(), isNull);
 
-        // Nada de esconder texto: os três continuam legíveis.
         expect(find.text('Qui'), findsOneWidget);
         expect(find.text('15'), findsOneWidget);
         expect(find.text('Out'), findsOneWidget);
@@ -841,16 +817,12 @@ void main() {
       await montar(tester);
       final normal = badge();
 
-      // A altura em escala normal é exatamente a de antes da correção.
-      // (A largura depende da fonte: a do ambiente de teste é bem mais
-      // larga que a Roboto do aparelho, então aqui só checamos o mínimo.)
       expect(normal.height, 52);
       expect(normal.width, greaterThanOrEqualTo(44));
 
       await montar(tester, escalaDeTexto: 1.5);
       final ampliado = badge();
 
-      // Cresce em vez de estourar, e sem explodir de tamanho.
       expect(ampliado.height, greaterThan(normal.height));
       expect(ampliado.width, lessThan(normal.width * 2));
     });
@@ -866,8 +838,6 @@ void main() {
     });
   });
 
-  // Reprodução do "BOTTOM OVERFLOWED BY 179 PIXELS" observado no aparelho:
-  // paisagem (360dp de altura) com o teclado ocupando 230dp.
   group('Responsividade — formulário com teclado', () {
     Future<void> abrirFormulario(WidgetTester tester) async {
       await tester.tap(find.text('+ Nova'));
@@ -881,7 +851,6 @@ void main() {
       await abrirFormulario(tester);
       await abrirTeclado(tester);
 
-      // Era aqui que aparecia o "BOTTOM OVERFLOWED BY 179 PIXELS".
       expect(tester.takeException(), isNull);
     });
 
@@ -892,7 +861,6 @@ void main() {
       await abrirFormulario(tester);
       await abrirTeclado(tester);
 
-      // Podem exigir rolagem, mas precisam ser atingíveis.
       await tester.ensureVisible(find.text('Adicionar'));
       await tester.pumpAndSettle();
       expect(find.text('Adicionar'), findsOneWidget);
@@ -902,7 +870,6 @@ void main() {
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();
 
-      // Tocar em Cancelar fecha a folha: prova que o botão recebe toque.
       expect(find.text('Nova consulta'), findsNothing);
     });
 
@@ -937,7 +904,6 @@ void main() {
           )
           .position;
 
-      // Nada a rolar: a folha continua do tamanho do conteúdo, como antes.
       expect(posicao.maxScrollExtent, 0);
       expect(tester.takeException(), isNull);
     });
@@ -958,7 +924,6 @@ void main() {
           )
           .position;
 
-      // É a rolagem que substitui o estouro de 179px.
       expect(posicao.maxScrollExtent, greaterThan(0));
     });
 
@@ -980,7 +945,6 @@ void main() {
       );
 
       expect(corpo, contains('SingleChildScrollView('));
-      // Sem supressão de overflow em lugar nenhum da tela.
       expect(fonteDaTela(), isNot(contains('FlutterError.onError')));
     });
 
