@@ -8,18 +8,16 @@ Aplicativo Flutter de acompanhamento da gestação, com foco em gestantes e acom
 
 ## Stack observada no repositório
 - Flutter / Dart
+- flutter_localizations (pt-BR)
 - Firebase Core
 - Firebase Authentication
 - Cloud Firestore
-- SharedPreferences
-- HTTP
+- Firebase Hosting (site público em `public/`)
 
 ## Estrutura funcional observada
 - Autenticação: login, cadastro e recuperação de senha
 - Onboarding/configuração da gestação
 - Registro e histórico de contrações
-- Análise de contrações
-- Assistente de dúvidas
 - Contador e histórico de chutes
 - Diário de sintomas
 - Agenda de consultas/exames
@@ -28,10 +26,9 @@ Aplicativo Flutter de acompanhamento da gestação, com foco em gestantes e acom
 - Tema claro/escuro
 
 ## Evidências de implementação atuais
-- `lib/main.dart` inicializa Firebase e decide entre login, onboarding e Home a partir do estado de autenticação.
+- `lib/main.dart` inicializa Firebase e, sem sessão, mostra o login; com sessão, entrega a navegação à `PortaDeEntrada` (`lib/screens/porta_de_entrada.dart`), que também é usada pelo login e pelo cadastro. Ela decide o destino com `ProximoDestino.calcular()`: sem o consentimento vigente para dados de saúde, abre a tela de consentimento; com ele, segue para o Onboarding ou para a Home.
 - `lib/services/auth_service.dart` implementa cadastro, login, recuperação de senha e logout com Firebase Authentication.
 - `lib/services/gestacao_storage.dart` persiste dados da gestação no Cloud Firestore por usuário autenticado.
-- `lib/services/ia_service.dart` atualmente responde por regras/heurísticas locais; não assumir integração ativa com Anthropic sem evidência no código atual.
 - Existem serviços e telas adicionais para vacinação, sintomas, consultas, chutes e conta.
 
 ## Regras para agentes
