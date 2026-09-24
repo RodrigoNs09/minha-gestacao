@@ -169,16 +169,70 @@ void main() {
       expect(texto, matches(RegExp(r'Última atualização: \d{1,2} de \w+ de \d{4}')));
     });
 
-    test('não declara base legal que o projeto não demonstra', () {
+    test('declara as três bases legais decididas', () {
+      expect(texto, contains('Bases legais'));
+      expect(
+        texto,
+        contains(
+          'o seu consentimento específico e destacado (LGPD, art. 11, I)',
+        ),
+      );
+      expect(texto, contains('antes de qualquer registro'));
+      expect(
+        texto,
+        contains(
+          'a execução do serviço que você solicita ao criar a conta '
+          '(LGPD, art. 7º, V)',
+        ),
+      );
+      expect(
+        texto,
+        contains(
+          'o legítimo interesse em proteger a sua conta (LGPD, art. 7º, IX)',
+        ),
+      );
+    });
+
+    test('não declara base legal que o app não usa', () {
       for (final base in [
-        'com base no seu consentimento',
-        'base legal',
-        'execução de contrato',
-        'legítimo interesse',
         'obrigação legal',
+        'tutela da saúde',
+        'proteção da vida',
+        'proteção do crédito',
+        'órgão de pesquisa',
       ]) {
         expect(texto, isNot(contains(base)), reason: base);
       }
+    });
+
+    test('o legítimo interesse não cobre dados de saúde', () {
+      final itens = RegExp(
+        r'<li>(.*?)</li>',
+        dotAll: true,
+      ).allMatches(pagina('privacidade.html')).map((m) => m.group(1)!);
+      final doLegitimoInteresse = itens
+          .where((item) => item.contains('legítimo interesse'))
+          .toList();
+
+      expect(doLegitimoInteresse, hasLength(1));
+      expect(doLegitimoInteresse.single, isNot(contains('saúde')));
+    });
+
+    test('a revogação do consentimento é feita pela exclusão da conta', () {
+      expect(
+        texto,
+        contains(
+          'A autorização para o tratamento dos dados de saúde pode ser '
+          'revogada a qualquer momento.',
+        ),
+      );
+      expect(
+        texto,
+        contains(
+          'a revogação é feita pela exclusão da conta, pelo caminho descrito '
+          'na seção 9.',
+        ),
+      );
     });
   });
 

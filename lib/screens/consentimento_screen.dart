@@ -24,9 +24,9 @@ const String consentimentoArmazenamento =
     'Ficam no Cloud Firestore, serviço do Firebase (Google), na região de São '
     'Paulo. Nenhuma outra conta do aplicativo tem acesso a eles.';
 
-const String consentimentoExclusao =
-    'Você pode excluir a conta e todos esses dados quando quiser, na tela '
-    'Conta do aplicativo.';
+const String consentimentoRevogacao =
+    'Você pode retirar a autorização quando quiser, excluindo a conta e todos '
+    'esses dados na tela Conta do aplicativo.';
 
 const String textoDoAceite =
     'Li a Política de Privacidade e autorizo o tratamento dos meus dados de '
@@ -538,8 +538,8 @@ class _ConsentimentoScreenState extends State<ConsentimentoScreen> {
                   _item(
                     context,
                     Icons.delete_outline_rounded,
-                    'Como excluir',
-                    consentimentoExclusao,
+                    'Como retirar a autorização',
+                    consentimentoRevogacao,
                   ),
                   _linkDaPolitica(context),
                   const SizedBox(height: 12),

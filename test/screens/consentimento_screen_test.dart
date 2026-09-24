@@ -99,11 +99,13 @@ void main() {
         consentimentoDados,
         consentimentoFinalidade,
         consentimentoArmazenamento,
-        consentimentoExclusao,
+        consentimentoRevogacao,
       ]) {
         await alcancar(tester, find.text(texto));
         expect(find.text(texto), findsOneWidget);
       }
+      expect(find.text('Como retirar a autorização'), findsOneWidget);
+      expect(find.text('Como excluir'), findsNothing);
       await alcancar(tester, find.text('Ler a Política de Privacidade'));
       expect(find.text('Ler a Política de Privacidade'), findsOneWidget);
       await alcancar(tester, find.text(textoDoAceite));
@@ -177,12 +179,37 @@ void main() {
       expect(consentimentoArmazenamento, contains('São Paulo'));
     });
 
-    test('a exclusão segue a seção 9', () {
+    test('retirar a autorização segue as seções 10 e 9', () {
       final p = politica();
 
+      expect(
+        p,
+        contains(
+          'A autorização para o tratamento dos dados de saúde pode ser '
+          'revogada a qualquer momento. Como o aplicativo não funciona sem '
+          'esses dados, a revogação é feita pela exclusão da conta, pelo '
+          'caminho descrito na seção 9.',
+        ),
+      );
       expect(p, contains('para abrir a tela Conta'));
       expect(p, contains('Excluir minha conta'));
-      expect(consentimentoExclusao, contains('tela Conta'));
+      expect(consentimentoRevogacao, contains('retirar a autorização'));
+      expect(consentimentoRevogacao, contains('quando quiser'));
+      expect(consentimentoRevogacao, contains('excluindo a conta'));
+      expect(consentimentoRevogacao, contains('tela Conta'));
+    });
+
+    test('a base legal declarada é o consentimento dado nesta tela', () {
+      final p = politica();
+
+      expect(
+        p,
+        contains(
+          'o seu consentimento específico e destacado (LGPD, art. 11, I)',
+        ),
+      );
+      expect(p, contains('dado na tela Seus dados de saúde do aplicativo'));
+      expect(fonte(), contains("'Seus dados de saúde'"));
     });
 
     test('a tela não promete que só a usuária acessa os dados', () {
@@ -190,7 +217,7 @@ void main() {
         consentimentoDados,
         consentimentoFinalidade,
         consentimentoArmazenamento,
-        consentimentoExclusao,
+        consentimentoRevogacao,
       ]) {
         expect(texto, isNot(contains('só você')));
         expect(texto, isNot(contains('apenas você')));

@@ -50,6 +50,27 @@ void main() {
       expect(ConsentimentoStorage.versaoPoliticaVigente, '$ano-$mes-$dia');
     });
 
+    test('a política informa o que o registro do aceite guarda', () {
+      final politica = File('public/privacidade.html')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'<[^>]+>'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(
+        politica,
+        contains(
+          'o aplicativo registra na sua conta a data e a hora do aceite e a '
+          'versão desta política que você aceitou, identificada pela data da '
+          'última atualização.',
+        ),
+      );
+      expect(
+        politica,
+        contains('o registro das versões anteriores é mantido.'),
+      );
+      expect(politica, contains('Esse registro é apagado junto com a conta.'));
+    });
+
     test('a versão tem o formato aaaa-mm-dd', () {
       expect(
         ConsentimentoStorage.versaoPoliticaVigente,
