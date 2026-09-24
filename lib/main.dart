@@ -19,6 +19,7 @@ import 'services/contracoes_storage.dart';
 import 'services/firestore_error.dart';
 import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
+import 'widgets/aviso_de_saude.dart';
 import 'widgets/moldura_responsiva.dart';
 import 'widgets/editar_dum_dialog.dart';
 import 'screens/onboarding_screen.dart';
@@ -748,6 +749,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           iconBg: AppColors.statGreen(context),
                           iconColor: const Color(0xFF1D9E75),
                         ),
+                        const SizedBox(height: 6),
+                        const AvisoDeSaude(),
                       ],
                     ),
                   ),

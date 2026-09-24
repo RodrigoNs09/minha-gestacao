@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/sessao.dart';
 import '../services/auth_service.dart';
 import '../services/exclusao_de_conta.dart';
 import '../services/firestore_error.dart';
+import '../services/links_publicos.dart';
 import '../theme/app_theme.dart';
 import '../widgets/moldura_responsiva.dart';
 import 'login_screen.dart';
@@ -147,9 +149,10 @@ class _ContaScreenState extends State<ContaScreen> {
           ),
           content: Text(
             'Isto apaga de vez suas contrações, seus chutes, seus sintomas, '
-            'suas consultas, suas vacinas, a data da última menstruação e o '
-            'seu login. A exclusão é permanente: não há como desfazer nem '
-            'recuperar depois.',
+            'humor e peso, suas consultas, suas vacinas, a data da última '
+            'menstruação e o seu login. A exclusão é permanente: não há como '
+            'desfazer nem recuperar depois. Na próxima etapa, você vai '
+            'confirmar sua senha.',
             style: TextStyle(
               fontSize: 12,
               height: 1.35,
@@ -439,6 +442,133 @@ class _ContaScreenState extends State<ContaScreen> {
     );
   }
 
+  Future<void> _abrirPolitica() async {
+    final abriu = await LinksPublicos.abrir(
+      LinksPublicos.politicaDePrivacidade,
+    );
+    if (abriu || !mounted) return;
+    await _mostrarLinkDaPolitica();
+  }
+
+  Future<void> _mostrarLinkDaPolitica() {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          scrollable: true,
+          backgroundColor: AppColors.surface(ctx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Política de Privacidade',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(ctx),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Não foi possível abrir o navegador. Acesse o endereço abaixo:',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AppColors.textSecondary(ctx),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SelectableText(
+                LinksPublicos.politicaDePrivacidade,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textPrimary(ctx),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => _copiarLinkDaPolitica(ctx),
+              child: Text(
+                'Copiar link',
+                style: TextStyle(color: AppColors.textPrimary(ctx)),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Fechar',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryPurple,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _copiarLinkDaPolitica(BuildContext dialogo) async {
+    var copiou = true;
+    try {
+      await Clipboard.setData(
+        const ClipboardData(text: LinksPublicos.politicaDePrivacidade),
+      );
+    } catch (_) {
+      copiou = false;
+    }
+
+    if (dialogo.mounted) Navigator.pop(dialogo);
+    if (!copiou || !mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Link copiado.')));
+  }
+
+  Widget _linkDaPolitica(BuildContext context) {
+    return Semantics(
+      link: true,
+      child: InkWell(
+        onTap: _abrirPolitica,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.privacy_tip_outlined,
+                size: 18,
+                color: AppColors.purpleLabel(context),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Política de Privacidade',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textPrimary(context),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.open_in_new_rounded,
+                size: 16,
+                color: AppColors.textMuted(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _botaoExcluir(BuildContext context) {
     return SizedBox(
       width: double.infinity,
@@ -534,6 +664,14 @@ class _ContaScreenState extends State<ContaScreen> {
                         color: AppColors.textMuted(context),
                       ),
                     ),
+                    const SizedBox(height: 28),
+                    Divider(
+                      color: AppColors.border(context),
+                      height: 1,
+                      thickness: 0.5,
+                    ),
+                    const SizedBox(height: 8),
+                    _linkDaPolitica(context),
                   ],
                 ),
               ),

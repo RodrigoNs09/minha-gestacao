@@ -186,16 +186,18 @@ void main() {
       expect(posicaoDoCorpo(tester).maxScrollExtent, greaterThan(0));
     });
 
-    testWidgets('num tablet alto o conteúdo cabe sem rolar', (tester) async {
+    testWidgets('num tablet alto só o aviso de saúde passa da dobra', (
+      tester,
+    ) async {
       await abrir(tester, tamanho: Telas.tablet);
 
-      expect(posicaoDoCorpo(tester).maxScrollExtent, 0);
+      expect(posicaoDoCorpo(tester).maxScrollExtent, closeTo(55.5, 2));
     });
 
     testWidgets('em 600x960 o corpo ainda rola um pouco', (tester) async {
       await abrir(tester, tamanho: Telas.tabletPequeno);
 
-      expect(posicaoDoCorpo(tester).maxScrollExtent, closeTo(136.5, 2));
+      expect(posicaoDoCorpo(tester).maxScrollExtent, closeTo(375.5, 2));
     });
 
     testWidgets('o conteúdo do fim da lista é alcançável em tela pequena', (

@@ -195,4 +195,4 @@ Evoluiu para **Minha Gestação** com o objetivo de acompanhar toda a jornada da
 
 **Rodrigo Nascimento da Silva**
 - GitHub: [@RodrigoNs09](https://github.com/RodrigoNs09)
-- E-mail: rodrigotw.com.br@gmail.com
+- E-mail: suporte.minhagestacaoapp@gmail.com
