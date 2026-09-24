@@ -245,9 +245,10 @@ void main() {
     });
   });
 
-  group('Logout tem um único dono', () {
-    test('só a ContaScreen chama AuthService.logout', () {
+  group('Logout tem donos definidos', () {
+    test('só a ContaScreen e o consentimento chamam AuthService.logout', () {
       expect(arquivosDeLibQueCitam('AuthService.logout'), [
+        'lib/screens/consentimento_screen.dart',
         'lib/screens/conta_screen.dart',
       ]);
     });
@@ -258,9 +259,11 @@ void main() {
       ]);
     });
 
-    test('a limpeza de sessão só é disparada pela ContaScreen', () {
+    test('a limpeza de sessão só é disparada pela ContaScreen e pelo '
+        'consentimento', () {
       expect(arquivosDeLibQueCitam('limparEstadoDaSessao()'), [
         'lib/data/sessao.dart',
+        'lib/screens/consentimento_screen.dart',
         'lib/screens/conta_screen.dart',
       ]);
     });
