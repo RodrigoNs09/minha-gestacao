@@ -48,11 +48,9 @@ class GestacaoStorage {
     return DateTime.tryParse(valor);
   }
 
-  static Future<bool> restaurarDUM() async {
-    final doc = _documento;
-    if (doc == null) return false;
-
-    final snapshot = await doc.get();
+  static Future<bool> restaurarDUM(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) async {
     if (!snapshot.exists) return false;
 
     final dados = snapshot.data();
@@ -69,6 +67,7 @@ class GestacaoStorage {
     }
 
     final id = novoGestacaoId();
+    final doc = snapshot.reference;
     await doc.set({_campoId: id}, SetOptions(merge: true));
     definirGestacao(dum, id);
     return true;

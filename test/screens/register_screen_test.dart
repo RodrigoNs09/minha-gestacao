@@ -342,12 +342,15 @@ void main() {
       expect(corpo, isNot(contains('resizeToAvoidBottomInset: false')));
     });
 
-    test('a lógica de cadastro não foi tocada', () {
+    test('o cadastro segue igual e o destino vem da porta de entrada', () {
       final corpo = corpoDoMetodo('Future<void> _cadastrar(');
 
       expect(corpo, contains('AuthService.cadastrar(email: email, senha: senha)'));
-      expect(corpo, contains('GestacaoStorage.restaurarDUM()'));
+      expect(corpo, contains('const PortaDeEntrada()'));
       expect(corpo, contains('pushAndRemoveUntil'));
+      expect(corpo, isNot(contains('restaurarDUM')));
+      expect(corpo, isNot(contains('HomeScreen')));
+      expect(corpo, isNot(contains('OnboardingScreen')));
       expect(corpo, contains('senha.length < 6'));
       expect(corpo, contains('senha != confirmar'));
     });

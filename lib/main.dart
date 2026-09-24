@@ -7,6 +7,7 @@ import 'models/contracao.dart';
 import 'screens/conta_screen.dart';
 import 'screens/contracao_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/porta_de_entrada.dart';
 import 'screens/historico_screen.dart';
 import 'screens/chutes_screen.dart';
 import 'screens/historico_chutes_screen.dart';
@@ -17,12 +18,10 @@ import 'data/contracoes_data.dart';
 import 'data/gestacao_data.dart';
 import 'services/contracoes_storage.dart';
 import 'services/firestore_error.dart';
-import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/aviso_de_saude.dart';
 import 'widgets/moldura_responsiva.dart';
 import 'widgets/editar_dum_dialog.dart';
-import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,109 +65,11 @@ class MinhaGestacaoApp extends StatelessWidget {
                 return const LoginScreen();
               }
 
-              return const _RestaurarDumGate();
+              return const PortaDeEntrada();
             },
           ),
         );
       },
-    );
-  }
-}
-
-class _RestaurarDumGate extends StatefulWidget {
-  const _RestaurarDumGate();
-
-  @override
-  State<_RestaurarDumGate> createState() => _RestaurarDumGateState();
-}
-
-class _RestaurarDumGateState extends State<_RestaurarDumGate> {
-  late Future<bool> _restaurarDumFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _restaurarDumFuture = GestacaoStorage.restaurarDUM();
-  }
-
-  void _tentarNovamente() {
-    setState(() {
-      _restaurarDumFuture = GestacaoStorage.restaurarDUM();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _restaurarDumFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return _ErroRestaurarDum(
-            mensagem: FirestoreErro.mensagemAmigavel(snapshot.error!),
-            aoTentarNovamente: _tentarNovamente,
-          );
-        }
-        final jaConfigurou = snapshot.data ?? false;
-        if (jaConfigurou) {
-          return const HomeScreen();
-        }
-        return const OnboardingScreen();
-      },
-    );
-  }
-}
-
-class _ErroRestaurarDum extends StatelessWidget {
-  final String mensagem;
-  final VoidCallback aoTentarNovamente;
-
-  const _ErroRestaurarDum({
-    required this.mensagem,
-    required this.aoTentarNovamente,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffold(context),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.textMuted(context)),
-              const SizedBox(height: 16),
-              Text(
-                'Não foi possível carregar sua gestação',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary(context)),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                mensagem,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary(context)),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: aoTentarNovamente,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Tentar novamente', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

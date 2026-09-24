@@ -15,6 +15,14 @@ class ConsentimentoStorage {
     return FirebaseFirestore.instance.collection('usuarios').doc(uid);
   }
 
+  static bool aceiteVigente(Map<String, dynamic>? dados) {
+    final registro = dados?[campo];
+    if (registro is! Map) return false;
+
+    return registro['versao_politica'] == versaoPoliticaVigente &&
+        registro['aceito_em'] is Timestamp;
+  }
+
   static Future<bool> registrarAceite() async {
     final doc = _documento;
     if (doc == null) return false;

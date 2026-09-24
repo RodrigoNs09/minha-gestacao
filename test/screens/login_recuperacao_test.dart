@@ -374,12 +374,15 @@ void main() {
       }
     });
 
-    test('a lógica de autenticação não foi tocada', () {
+    test('a autenticação segue igual e o destino vem da porta de entrada', () {
       final corpo = corpoDoMetodo('Future<void> _fazerLogin(');
 
       expect(corpo, contains('AuthService.login(email: email, senha: senha)'));
-      expect(corpo, contains('GestacaoStorage.restaurarDUM()'));
+      expect(corpo, contains('const PortaDeEntrada()'));
       expect(corpo, contains('pushAndRemoveUntil'));
+      expect(corpo, isNot(contains('restaurarDUM')));
+      expect(corpo, isNot(contains('HomeScreen')));
+      expect(corpo, isNot(contains('OnboardingScreen')));
     });
   });
 }

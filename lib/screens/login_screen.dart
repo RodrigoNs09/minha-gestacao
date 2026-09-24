@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/gestacao_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/moldura_responsiva.dart';
-import '../main.dart';
-import 'onboarding_screen.dart';
+import 'porta_de_entrada.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -54,13 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final jaConfigurou = await GestacaoStorage.restaurarDUM();
-    if (!mounted) return;
-
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => jaConfigurou ? const HomeScreen() : const OnboardingScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const PortaDeEntrada()),
       (route) => false,
     );
   }

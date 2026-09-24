@@ -188,9 +188,28 @@ void main() {
       expect(
         texto,
         contains(
-          'o legítimo interesse em proteger a sua conta (LGPD, art. 7º, IX)',
+          'o legítimo interesse em fazer o serviço funcionar com segurança '
+          '(LGPD, art. 7º, IX)',
         ),
       );
+    });
+
+    test('o legítimo interesse cobre todos os dados técnicos', () {
+      final item = RegExp(r'<li>(.*?)</li>', dotAll: true)
+          .allMatches(pagina('privacidade.html'))
+          .map((m) => textoVisivel(m.group(1)!))
+          .singleWhere((item) => item.contains('legítimo interesse'));
+
+      for (final dado in [
+        'Dados técnicos',
+        'endereço IP',
+        'informações de conexão recebidos pelos serviços do Google',
+        'reCAPTCHA',
+        'registros de acesso da conta',
+        'acessos ao site',
+      ]) {
+        expect(item, contains(dado), reason: dado);
+      }
     });
 
     test('não declara base legal que o app não usa', () {
